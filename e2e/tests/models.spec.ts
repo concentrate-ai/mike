@@ -1,0 +1,33 @@
+import { test, expect } from "@playwright/test";
+import { signIn, EXISTING_USER } from "../helpers/auth";
+
+test.describe("Model picker", () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page, EXISTING_USER);
+  });
+
+  test("model picker opens and shows groups", async ({ page }) => {
+    const toggle = page.locator("button").filter({ hasText: /Flash|Claude|GPT/ }).first();
+    await expect(toggle).toBeVisible({ timeout: 5_000 });
+    await toggle.click();
+
+    const menu = page.locator('[role="menu"]');
+    await expect(menu).toBeVisible();
+
+    await expect(menu.getByText("Anthropic", { exact: true })).toBeVisible();
+    await expect(menu.getByText("Google", { exact: true })).toBeVisible();
+    await expect(menu.getByText("OpenAI", { exact: true })).toBeVisible();
+  });
+
+  test("model selection changes the toggle label", async ({ page }) => {
+    const toggle = page.locator("button").filter({ hasText: /Flash|Claude|GPT/ }).first();
+    await toggle.click();
+
+    const menu = page.locator('[role="menu"]');
+    await menu.getByText("Claude Sonnet 4.6").click();
+
+    await expect(
+      page.locator("button").filter({ hasText: "Claude Sonnet 4.6" }),
+    ).toBeVisible({ timeout: 3_000 });
+  });
+});
