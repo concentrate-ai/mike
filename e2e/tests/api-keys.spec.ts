@@ -10,6 +10,7 @@ test.describe("API key management", () => {
     await page.goto("/account/models");
     await page.waitForLoadState("networkidle");
 
+    await expect(page.getByText("Concentrate API Key")).toBeVisible();
     await expect(page.getByText("Anthropic (Claude) API Key")).toBeVisible();
     await expect(page.getByText("Google (Gemini) API Key")).toBeVisible();
     await expect(page.getByText("OpenAI API Key")).toBeVisible();

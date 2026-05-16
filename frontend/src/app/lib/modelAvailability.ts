@@ -1,7 +1,7 @@
-import { MODELS, type ModelOption } from "../components/assistant/ModelToggle";
+import { MODELS, type ModelOption } from "@/app/lib/models";
 import type { ApiKeyState } from "@/app/lib/mikeApi";
 
-export type ModelProvider = "claude" | "gemini" | "openai";
+export type ModelProvider = "claude" | "gemini" | "openai" | "concentrate";
 
 export function getModelProvider(modelId: string): ModelProvider | null {
     const model = MODELS.find((m) => m.id === modelId);
@@ -14,7 +14,9 @@ export function isModelAvailable(
     apiKeys: ApiKeyState,
 ): boolean {
     const provider = getModelProvider(modelId);
-    if (!provider) return false;
+    if (!provider) {
+        return !!apiKeys.concentrate?.configured;
+    }
     return isProviderAvailable(provider, apiKeys);
 }
 
@@ -22,19 +24,21 @@ export function isProviderAvailable(
     provider: ModelProvider,
     apiKeys: ApiKeyState,
 ): boolean {
-    return !!apiKeys[provider]?.configured;
+    return !!apiKeys[provider]?.configured || !!apiKeys.concentrate?.configured;
 }
 
 export function providerLabel(provider: ModelProvider): string {
     if (provider === "claude") return "Anthropic (Claude)";
     if (provider === "openai") return "OpenAI";
+    if (provider === "concentrate") return "Concentrate";
     return "Google (Gemini)";
 }
 
 export function modelGroupToProvider(
-    group: ModelOption["group"],
+    group: string,
 ): ModelProvider {
     if (group === "Anthropic") return "claude";
     if (group === "OpenAI") return "openai";
-    return "gemini";
+    if (group === "Google") return "gemini";
+    return "concentrate";
 }

@@ -26,4 +26,23 @@ test.describe("Chat", () => {
       timeout: 5_000,
     });
   });
+
+  test("model toggle shows dynamic model name after selection", async ({ page }) => {
+    const toggle = page.locator("button").filter({ hasText: /Flash|Claude|GPT/ }).first();
+    await toggle.click();
+
+    const menu = page.locator('[role="menu"]');
+    const items = menu.locator('[role="menuitem"]');
+
+    await expect(async () => {
+      const count = await items.count();
+      expect(count).toBeGreaterThan(6);
+    }).toPass({ timeout: 10_000 });
+
+    await menu.getByText("Claude Opus 4.7").click();
+
+    await expect(
+      page.locator("button").filter({ hasText: "Claude Opus 4.7" }),
+    ).toBeVisible({ timeout: 3_000 });
+  });
 });

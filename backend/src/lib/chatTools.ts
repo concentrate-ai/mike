@@ -2830,7 +2830,7 @@ export async function runLLMStream(params: {
         citationsOpenSeen = false;
     };
 
-    const selectedModel = resolveModel(model, DEFAULT_MAIN_MODEL);
+    const selectedModel = resolveModel(model, DEFAULT_MAIN_MODEL, !!apiKeys?.concentrate?.trim());
 
     await streamChatWithTools({
         model: selectedModel,

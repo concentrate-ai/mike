@@ -11,6 +11,7 @@ import { tabularRouter } from "./routes/tabular";
 import { workflowsRouter } from "./routes/workflows";
 import { userRouter } from "./routes/user";
 import { downloadsRouter } from "./routes/downloads";
+import { concentrateModelsRouter } from "./routes/concentrateModels";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -90,7 +91,9 @@ app.use(
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
+    origin: process.env.FRONTEND_URL?.includes(",")
+      ? process.env.FRONTEND_URL.split(",").map((s) => s.trim())
+      : process.env.FRONTEND_URL ?? "http://localhost:3000",
     credentials: true,
   }),
 );
@@ -118,6 +121,7 @@ app.use("/workflows", workflowsRouter);
 app.use("/user", userRouter);
 app.use("/users", userRouter);
 app.use("/download", downloadsRouter);
+app.use("/concentrate/models", concentrateModelsRouter);
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 

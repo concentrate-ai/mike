@@ -45,11 +45,15 @@ const ALL_MODELS = new Set<string>([
 export function providerForModel(model: string): Provider {
     if (model.startsWith("claude")) return "claude";
     if (model.startsWith("gemini")) return "gemini";
-    if (model.startsWith("gpt-")) return "openai";
-    throw new Error(`Unknown model id: ${model}`);
+    if (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4")) return "openai";
+    return "concentrate";
 }
 
-export function resolveModel(id: string | null | undefined, fallback: string): string {
-    if (id && ALL_MODELS.has(id)) return id;
+export function resolveModel(
+    id: string | null | undefined,
+    fallback: string,
+    allowDynamic = false,
+): string {
+    if (id && (ALL_MODELS.has(id) || allowDynamic)) return id;
     return fallback;
 }

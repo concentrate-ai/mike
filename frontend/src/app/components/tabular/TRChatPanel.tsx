@@ -28,7 +28,7 @@ import type {
     ColumnConfig,
     MikeDocument,
 } from "../shared/types";
-import { ModelToggle } from "../assistant/ModelToggle";
+import { ModelToggle, useModels } from "../assistant/ModelToggle";
 import { ApiKeyMissingModal } from "../shared/ApiKeyMissingModal";
 import { PreResponseWrapper } from "../shared/PreResponseWrapper";
 import { useUserProfile } from "@/contexts/UserProfileContext";
@@ -448,6 +448,7 @@ function TRChatInput({
     model,
     onModelChange,
     apiKeys,
+    models,
     onHeightChange,
 }: {
     isLoading: boolean;
@@ -456,6 +457,7 @@ function TRChatInput({
     model: string;
     onModelChange: (id: string) => void;
     apiKeys?: ApiKeyState;
+    models?: import("@/app/lib/models").ModelOption[];
     onHeightChange: (height: number) => void;
 }) {
     const [value, setValue] = useState("");
@@ -532,6 +534,7 @@ function TRChatInput({
                         value={model}
                         onChange={onModelChange}
                         apiKeys={apiKeys}
+                        models={models}
                     />
                     <button
                         type="button"
@@ -644,6 +647,7 @@ export function TRChatPanel({
 }: Props) {
     const { profile, updateModelPreference } = useUserProfile();
     const apiKeys = profile?.apiKeys;
+    const { models } = useModels(apiKeys);
     const currentModel = profile?.tabularModel ?? "gemini-3-flash-preview";
     const [apiKeyModalProvider, setApiKeyModalProvider] =
         useState<ModelProvider | null>(null);
@@ -1493,6 +1497,7 @@ export function TRChatPanel({
                     updateModelPreference("tabularModel", id)
                 }
                 apiKeys={apiKeys}
+                models={models}
                 onHeightChange={setInputHeight}
             />
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Check, AlertCircle } from "lucide-react";
 import {
     DropdownMenu,
@@ -12,41 +12,56 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { isModelAvailable } from "@/app/lib/modelAvailability";
 import type { ApiKeyState } from "@/app/lib/mikeApi";
+import { MODELS, type ModelOption } from "@/app/lib/models";
+import { fetchConcentrateModels } from "@/app/lib/concentrateModels";
 
-export interface ModelOption {
-    id: string;
-    label: string;
-    group: "Anthropic" | "Google" | "OpenAI";
+export { MODELS, type ModelOption } from "@/app/lib/models";
+export { DEFAULT_MODEL_ID, ALLOWED_MODEL_IDS } from "@/app/lib/models";
+
+export function useModels(apiKeys?: ApiKeyState): {
+    models: ModelOption[];
+    dynamicIds: Set<string>;
+} {
+    const [concentrateModels, setConcentrateModels] = useState<ModelOption[]>([]);
+
+    useEffect(() => {
+        if (!apiKeys?.concentrate?.configured) {
+            setConcentrateModels([]);
+            return;
+        }
+        fetchConcentrateModels(apiKeys).then(setConcentrateModels).catch(() => {});
+    }, [apiKeys?.concentrate?.configured]);
+
+    return useMemo(() => {
+        const all = [...MODELS, ...concentrateModels];
+        const dynamicIds = new Set(concentrateModels.map((m) => m.id));
+        return { models: all, dynamicIds };
+    }, [concentrateModels]);
 }
-
-export const MODELS: ModelOption[] = [
-    { id: "claude-opus-4-7", label: "Claude Opus 4.7", group: "Anthropic" },
-    { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", group: "Anthropic" },
-    { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", group: "Google" },
-    { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", group: "Google" },
-    { id: "gpt-5.5", label: "GPT-5.5", group: "OpenAI" },
-    { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", group: "OpenAI" },
-];
-
-export const DEFAULT_MODEL_ID = "gemini-3-flash-preview";
-
-export const ALLOWED_MODEL_IDS = new Set(MODELS.map((m) => m.id));
-
-const GROUP_ORDER: ModelOption["group"][] = ["Anthropic", "Google", "OpenAI"];
 
 interface Props {
     value: string;
     onChange: (id: string) => void;
     apiKeys?: ApiKeyState;
+    models?: ModelOption[];
 }
 
-export function ModelToggle({ value, onChange, apiKeys }: Props) {
+export function ModelToggle({ value, onChange, apiKeys, models }: Props) {
     const [isOpen, setIsOpen] = useState(false);
-    const selected = MODELS.find((m) => m.id === value);
+    const items = models ?? MODELS;
+    const selected = items.find((m) => m.id === value);
     const selectedLabel = selected?.label ?? "Model";
     const selectedAvailable = apiKeys
         ? isModelAvailable(value, apiKeys)
         : true;
+
+    const groups = useMemo(() => {
+        const seen: string[] = [];
+        for (const m of items) {
+            if (!seen.includes(m.group)) seen.push(m.group);
+        }
+        return seen;
+    }, [items]);
 
     return (
         <DropdownMenu onOpenChange={setIsOpen}>
@@ -69,17 +84,17 @@ export function ModelToggle({ value, onChange, apiKeys }: Props) {
                     />
                 </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 z-50" side="top" align="start">
-                {GROUP_ORDER.map((group, gi) => {
-                    const items = MODELS.filter((m) => m.group === group);
-                    if (items.length === 0) return null;
+            <DropdownMenuContent className="w-56 z-50 max-h-80 overflow-y-auto" side="top" align="start">
+                {groups.map((group, gi) => {
+                    const groupItems = items.filter((m) => m.group === group);
+                    if (groupItems.length === 0) return null;
                     return (
                         <div key={group}>
                             {gi > 0 && <DropdownMenuSeparator />}
                             <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-gray-400">
                                 {group}
                             </DropdownMenuLabel>
-                            {items.map((m) => {
+                            {groupItems.map((m) => {
                                 const available = apiKeys
                                     ? isModelAvailable(m.id, apiKeys)
                                     : true;

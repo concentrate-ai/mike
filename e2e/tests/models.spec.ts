@@ -30,4 +30,35 @@ test.describe("Model picker", () => {
       page.locator("button").filter({ hasText: "Claude Sonnet 4.6" }),
     ).toBeVisible({ timeout: 3_000 });
   });
+
+  test("model picker shows more than 10 models with Concentrate", async ({ page }) => {
+    const toggle = page.locator("button").filter({ hasText: /Flash|Claude|GPT/ }).first();
+    await toggle.click();
+
+    const menu = page.locator('[role="menu"]');
+    const items = menu.locator('[role="menuitem"]');
+
+    await expect(async () => {
+      const count = await items.count();
+      expect(count).toBeGreaterThan(10);
+    }).toPass({ timeout: 10_000 });
+  });
+
+  test("model picker dropdown is scrollable", async ({ page }) => {
+    const toggle = page.locator("button").filter({ hasText: /Flash|Claude|GPT/ }).first();
+    await toggle.click();
+
+    const menu = page.locator('[role="menu"]');
+
+    const items = menu.locator('[role="menuitem"]');
+    await expect(async () => {
+      const count = await items.count();
+      expect(count).toBeGreaterThan(10);
+    }).toPass({ timeout: 10_000 });
+
+    const isScrollable = await menu.evaluate(
+      (el) => el.scrollHeight > el.clientHeight,
+    );
+    expect(isScrollable).toBe(true);
+  });
 });

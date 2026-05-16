@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import type { ApiKeyState } from "@/app/lib/mikeApi";
-import { MODELS } from "@/app/components/assistant/ModelToggle";
+import { MODELS } from "@/app/lib/models";
 import {
     isModelAvailable,
     modelGroupToProvider,
@@ -22,6 +22,14 @@ import {
 } from "@/app/lib/modelAvailability";
 
 const API_KEY_FIELDS = [
+    {
+        provider: "concentrate",
+        label: "Concentrate API Key",
+        placeholder: "sk-cn-…",
+        description:
+            "One key for OpenAI, Anthropic & Google as well as Minimax, GLM, DeepSeek, Qwen & 100s of other OSS models.",
+        link: "https://concentrate.ai",
+    },
     {
         provider: "claude",
         label: "Anthropic (Claude) API Key",
@@ -96,6 +104,8 @@ export default function ModelsAndApiKeysPage() {
                             key={field.provider}
                             label={field.label}
                             placeholder={field.placeholder}
+                            description={"description" in field ? field.description : undefined}
+                            link={"link" in field ? field.link : undefined}
                             hasSavedKey={
                                 !!profile?.apiKeys[field.provider].configured
                             }
@@ -132,11 +142,10 @@ function TabularModelDropdown({
     const [isOpen, setIsOpen] = useState(false);
     const selected = MODELS.find((m) => m.id === value);
     const selectedAvailable = apiKeys ? isModelAvailable(value, apiKeys) : true;
-    const groups: ("Anthropic" | "Google" | "OpenAI")[] = [
-        "Anthropic",
-        "Google",
-        "OpenAI",
-    ];
+    const groups: string[] = [];
+    for (const m of MODELS) {
+        if (!groups.includes(m.group)) groups.push(m.group);
+    }
 
     return (
         <DropdownMenu onOpenChange={setIsOpen}>
@@ -213,6 +222,8 @@ function TabularModelDropdown({
 function ApiKeyField({
     label,
     placeholder,
+    description,
+    link,
     hasSavedKey,
     isServerConfigured,
     onSave,
@@ -220,6 +231,8 @@ function ApiKeyField({
 }: {
     label: string;
     placeholder: string;
+    description?: string;
+    link?: string;
     hasSavedKey: boolean;
     isServerConfigured: boolean;
     onSave: (value: string) => Promise<boolean>;
@@ -258,7 +271,25 @@ function ApiKeyField({
 
     return (
         <div>
-            <label className="text-sm text-gray-600 block mb-2">{label}</label>
+            <label className="text-sm text-gray-600 block mb-1">{label}</label>
+            {description && (
+                <p className="text-xs text-gray-400 mb-2">
+                    {description}
+                    {link && (
+                        <>
+                            {" "}
+                            <a
+                                href={link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:text-blue-600 underline"
+                            >
+                                {link.replace(/^https?:\/\//, "")}
+                            </a>
+                        </>
+                    )}
+                </p>
+            )}
             {isServerConfigured && (
                 <div className="mb-2 rounded-md border border-blue-100 bg-blue-50 px-3 py-2">
                     <p className="text-xs text-blue-800">
