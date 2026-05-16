@@ -15,6 +15,7 @@ import {
     type UserProfile as ApiUserProfile,
     getUserProfile,
     saveApiKey,
+    saveFavoriteModels,
     updateUserProfile,
 } from "@/app/lib/mikeApi";
 
@@ -26,6 +27,7 @@ interface UserProfile {
     creditsRemaining: number;
     tier: string;
     tabularModel: string;
+    favoriteModels: string[];
     apiKeys: ApiKeyState;
 }
 
@@ -42,6 +44,7 @@ interface UserProfileContextType {
         provider: ApiKeyProvider,
         value: string | null,
     ) => Promise<boolean>;
+    toggleFavoriteModel: (modelId: string) => Promise<boolean>;
     reloadProfile: () => Promise<void>;
     incrementMessageCredits: () => Promise<boolean>;
 }
@@ -102,6 +105,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
                 creditsRemaining: 999999, // temporarily unlimited
                 tier: "Free",
                 tabularModel: "gemini-3-flash-preview",
+                favoriteModels: [],
                 apiKeys: emptyApiKeys(),
             });
         } finally {
@@ -204,6 +208,32 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         [user],
     );
 
+    const toggleFavoriteModel = useCallback(
+        async (modelId: string): Promise<boolean> => {
+            if (!user || !profile) return false;
+
+            const current = profile.favoriteModels;
+            const next = current.includes(modelId)
+                ? current.filter((id) => id !== modelId)
+                : [...current, modelId];
+
+            setProfile((prev) =>
+                prev ? { ...prev, favoriteModels: next } : null,
+            );
+
+            try {
+                await saveFavoriteModels(next);
+                return true;
+            } catch {
+                setProfile((prev) =>
+                    prev ? { ...prev, favoriteModels: current } : null,
+                );
+                return false;
+            }
+        },
+        [user, profile],
+    );
+
     const reloadProfile = useCallback(async () => {
         if (user) {
             await loadProfile();
@@ -232,6 +262,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
                 updateOrganisation,
                 updateModelPreference,
                 updateApiKey,
+                toggleFavoriteModel,
                 reloadProfile,
                 incrementMessageCredits,
             }}

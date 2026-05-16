@@ -61,4 +61,35 @@ test.describe("Model picker", () => {
     );
     expect(isScrollable).toBe(true);
   });
+
+  test("star button toggles a model as favorite", async ({ page }) => {
+    const toggle = page.locator("button").filter({ hasText: /Flash|Claude|GPT/ }).first();
+    await toggle.click();
+
+    const menu = page.locator('[role="menu"]');
+    await expect(menu).toBeVisible();
+
+    const starBtn = menu.locator('button[aria-label="Add to favorites"]').first();
+    await expect(starBtn).toBeVisible({ timeout: 5_000 });
+    await starBtn.click();
+
+    await toggle.click();
+    await expect(menu.getByText("Favorites", { exact: true })).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("ZDR shield icon is shown on eligible models", async ({ page }) => {
+    const toggle = page.locator("button").filter({ hasText: /Flash|Claude|GPT/ }).first();
+    await toggle.click();
+
+    const menu = page.locator('[role="menu"]');
+    const items = menu.locator('[role="menuitem"]');
+    await expect(async () => {
+      const count = await items.count();
+      expect(count).toBeGreaterThan(6);
+    }).toPass({ timeout: 10_000 });
+
+    const zdrIcons = menu.locator('[aria-label="Zero data retention"]');
+    const count = await zdrIcons.count();
+    expect(count).toBeGreaterThan(0);
+  });
 });

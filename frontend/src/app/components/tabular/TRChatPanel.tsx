@@ -449,6 +449,8 @@ function TRChatInput({
     onModelChange,
     apiKeys,
     models,
+    favoriteModels,
+    onToggleFavorite,
     onHeightChange,
 }: {
     isLoading: boolean;
@@ -458,6 +460,8 @@ function TRChatInput({
     onModelChange: (id: string) => void;
     apiKeys?: ApiKeyState;
     models?: import("@/app/lib/models").ModelOption[];
+    favoriteModels?: string[];
+    onToggleFavorite?: (modelId: string) => void;
     onHeightChange: (height: number) => void;
 }) {
     const [value, setValue] = useState("");
@@ -535,6 +539,8 @@ function TRChatInput({
                         onChange={onModelChange}
                         apiKeys={apiKeys}
                         models={models}
+                        favoriteModels={favoriteModels}
+                        onToggleFavorite={onToggleFavorite}
                     />
                     <button
                         type="button"
@@ -645,7 +651,7 @@ export function TRChatPanel({
     initialChatId,
     onChatIdChange,
 }: Props) {
-    const { profile, updateModelPreference } = useUserProfile();
+    const { profile, updateModelPreference, toggleFavoriteModel } = useUserProfile();
     const apiKeys = profile?.apiKeys;
     const { models } = useModels(apiKeys);
     const currentModel = profile?.tabularModel ?? "gemini-3-flash-preview";
@@ -1498,6 +1504,8 @@ export function TRChatPanel({
                 }
                 apiKeys={apiKeys}
                 models={models}
+                favoriteModels={profile?.favoriteModels}
+                onToggleFavorite={profile ? toggleFavoriteModel : undefined}
                 onHeightChange={setInputHeight}
             />
 

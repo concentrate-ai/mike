@@ -21,6 +21,7 @@ type UserProfileRow = {
   credits_reset_date: string;
   tier: string;
   tabular_model: string;
+  favorite_models: string[];
 };
 
 function serializeProfile(
@@ -36,6 +37,7 @@ function serializeProfile(
     creditsRemaining: Math.max(MONTHLY_CREDIT_LIMIT - creditsUsed, 0),
     tier: row.tier || "Free",
     tabularModel: resolveModel(row.tabular_model, DEFAULT_TABULAR_MODEL),
+    favoriteModels: Array.isArray(row.favorite_models) ? row.favorite_models : [],
     ...(apiKeyStatus ? { apiKeyStatus } : {}),
   };
 }
@@ -122,7 +124,7 @@ async function loadProfile(
   let { data, error } = await db
     .from("user_profiles")
     .select(
-      "display_name, organisation, message_credits_used, credits_reset_date, tier, tabular_model",
+      "display_name, organisation, message_credits_used, credits_reset_date, tier, tabular_model, favorite_models",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -139,7 +141,7 @@ async function loadProfile(
     const created = await db
       .from("user_profiles")
       .select(
-        "display_name, organisation, message_credits_used, credits_reset_date, tier, tabular_model",
+        "display_name, organisation, message_credits_used, credits_reset_date, tier, tabular_model, favorite_models",
       )
       .eq("user_id", userId)
       .single();
@@ -160,7 +162,7 @@ async function loadProfile(
       })
       .eq("user_id", userId)
       .select(
-        "display_name, organisation, message_credits_used, credits_reset_date, tier, tabular_model",
+        "display_name, organisation, message_credits_used, credits_reset_date, tier, tabular_model, favorite_models",
       )
       .single();
 
@@ -251,6 +253,24 @@ userRouter.put("/api-keys/:provider", requireAuth, async (req, res) => {
     });
     res.status(500).json({ detail: "Failed to save API key" });
   }
+});
+
+// PUT /user/favorite-models
+userRouter.put("/favorite-models", requireAuth, async (req, res) => {
+  const userId = res.locals.userId as string;
+  const models = req.body?.models;
+  if (!Array.isArray(models) || models.some((m: unknown) => typeof m !== "string")) {
+    return void res.status(400).json({ detail: "models must be an array of strings" });
+  }
+  const db = createServerSupabase();
+  const ensureError = await ensureProfileRow(db, userId);
+  if (ensureError) return void res.status(500).json({ detail: ensureError.message });
+  const { error } = await db
+    .from("user_profiles")
+    .update({ favorite_models: models, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+  if (error) return void res.status(500).json({ detail: error.message });
+  res.json({ favoriteModels: models });
 });
 
 // DELETE /user/account

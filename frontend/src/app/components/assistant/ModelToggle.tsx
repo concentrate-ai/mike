@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Check, AlertCircle } from "lucide-react";
+import { ChevronDown, Check, AlertCircle, Star, Shield } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -33,9 +33,13 @@ export function useModels(apiKeys?: ApiKeyState): {
     }, [apiKeys?.concentrate?.configured]);
 
     return useMemo(() => {
-        const all = [...MODELS, ...concentrateModels];
         const dynamicIds = new Set(concentrateModels.map((m) => m.id));
-        return { models: all, dynamicIds };
+        const enriched = MODELS.map((m) => {
+            const dyn = concentrateModels.find((d) => d.id === m.id);
+            return dyn ? { ...m, zdr: dyn.zdr } : m;
+        });
+        const extra = concentrateModels.filter((m) => !MODELS.some((s) => s.id === m.id));
+        return { models: [...enriched, ...extra], dynamicIds };
     }, [concentrateModels]);
 }
 
@@ -44,9 +48,20 @@ interface Props {
     onChange: (id: string) => void;
     apiKeys?: ApiKeyState;
     models?: ModelOption[];
+    favoriteModels?: string[];
+    onToggleFavorite?: (modelId: string) => void;
+    showZdr?: boolean;
 }
 
-export function ModelToggle({ value, onChange, apiKeys, models }: Props) {
+export function ModelToggle({
+    value,
+    onChange,
+    apiKeys,
+    models,
+    favoriteModels = [],
+    onToggleFavorite,
+    showZdr = true,
+}: Props) {
     const [isOpen, setIsOpen] = useState(false);
     const items = models ?? MODELS;
     const selected = items.find((m) => m.id === value);
@@ -55,13 +70,24 @@ export function ModelToggle({ value, onChange, apiKeys, models }: Props) {
         ? isModelAvailable(value, apiKeys)
         : true;
 
+    const favoritesSet = useMemo(() => new Set(favoriteModels), [favoriteModels]);
+
     const groups = useMemo(() => {
         const seen: string[] = [];
+        const hasFavorites = items.some((m) => favoritesSet.has(m.id));
+        if (hasFavorites) seen.push("Favorites");
         for (const m of items) {
             if (!seen.includes(m.group)) seen.push(m.group);
         }
         return seen;
-    }, [items]);
+    }, [items, favoritesSet]);
+
+    const itemsForGroup = (group: string) => {
+        if (group === "Favorites") {
+            return items.filter((m) => favoritesSet.has(m.id));
+        }
+        return items.filter((m) => m.group === group);
+    };
 
     return (
         <DropdownMenu onOpenChange={setIsOpen}>
@@ -86,7 +112,7 @@ export function ModelToggle({ value, onChange, apiKeys, models }: Props) {
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 z-50 max-h-80 overflow-y-auto" side="top" align="start">
                 {groups.map((group, gi) => {
-                    const groupItems = items.filter((m) => m.group === group);
+                    const groupItems = itemsForGroup(group);
                     if (groupItems.length === 0) return null;
                     return (
                         <div key={group}>
@@ -98,17 +124,40 @@ export function ModelToggle({ value, onChange, apiKeys, models }: Props) {
                                 const available = apiKeys
                                     ? isModelAvailable(m.id, apiKeys)
                                     : true;
+                                const isFav = favoritesSet.has(m.id);
                                 return (
                                     <DropdownMenuItem
-                                        key={m.id}
+                                        key={`${group}-${m.id}`}
                                         className="cursor-pointer"
                                         onSelect={() => onChange(m.id)}
                                     >
+                                        {onToggleFavorite && (
+                                            <button
+                                                type="button"
+                                                className="mr-1 shrink-0"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                    onToggleFavorite(m.id);
+                                                }}
+                                                aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
+                                            >
+                                                <Star
+                                                    className={`h-3.5 w-3.5 ${isFav ? "fill-yellow-400 text-yellow-400" : "text-gray-300 hover:text-yellow-400"}`}
+                                                />
+                                            </button>
+                                        )}
                                         <span
-                                            className={`flex-1 ${available ? "" : "text-gray-400"}`}
+                                            className={`flex-1 truncate ${available ? "" : "text-gray-400"}`}
                                         >
                                             {m.label}
                                         </span>
+                                        {showZdr && m.zdr && (
+                                            <Shield
+                                                className="h-3 w-3 text-green-600 ml-1 shrink-0"
+                                                aria-label="Zero data retention"
+                                            />
+                                        )}
                                         {!available && (
                                             <AlertCircle
                                                 className="h-3.5 w-3.5 text-red-500 ml-1"

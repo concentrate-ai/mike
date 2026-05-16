@@ -105,6 +105,7 @@ export interface UserProfile {
     creditsRemaining: number;
     tier: string;
     tabularModel: string;
+    favoriteModels: string[];
     apiKeyStatus: ApiKeyStatus;
 }
 
@@ -150,6 +151,16 @@ export async function saveApiKey(
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ api_key: apiKey }),
+    });
+}
+
+export async function saveFavoriteModels(
+    models: string[],
+): Promise<{ favoriteModels: string[] }> {
+    return apiRequest<{ favoriteModels: string[] }>("/user/favorite-models", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ models }),
     });
 }
 

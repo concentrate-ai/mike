@@ -65,7 +65,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
         id: string;
         title: string;
     } | null>(null);
-    const { profile } = useUserProfile();
+    const { profile, toggleFavoriteModel } = useUserProfile();
     const apiKeys = profile?.apiKeys;
     const { models, dynamicIds } = useModels(apiKeys);
     const [model, setModel] = useSelectedModel(dynamicIds);
@@ -277,6 +277,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                                 onChange={setModel}
                                 apiKeys={apiKeys}
                                 models={models}
+                                favoriteModels={profile?.favoriteModels}
+                                onToggleFavorite={profile ? toggleFavoriteModel : undefined}
                             />
                             <button
                                 type="button"

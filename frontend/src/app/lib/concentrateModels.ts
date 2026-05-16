@@ -1,5 +1,5 @@
 import type { ApiKeyState } from "@/app/lib/mikeApi";
-import { MODELS, type ModelOption } from "./models";
+import type { ModelOption } from "./models";
 
 type ConcentrateModel = {
     id: string;
@@ -22,13 +22,19 @@ const AUTHOR_DISPLAY: Record<string, string> = {
 };
 
 const FLAGSHIP_IDS = new Set([
+    "claude-opus-4-7",
+    "claude-sonnet-4-6",
     "claude-opus-4-5",
     "claude-sonnet-4-5",
     "claude-opus-4-1",
     "claude-haiku-4-5",
+    "gpt-5.5",
+    "gpt-5.4-mini",
     "gpt-5.4",
     "gpt-5.4-nano",
     "o1",
+    "gemini-3.1-pro-preview",
+    "gemini-3-flash-preview",
     "gemini-2.5-pro",
     "gemini-2.5-flash",
     "deepseek-r1",
@@ -49,8 +55,6 @@ const FLAGSHIP_IDS = new Set([
 function displayAuthor(slug: string): string {
     return AUTHOR_DISPLAY[slug] ?? slug.charAt(0).toUpperCase() + slug.slice(1);
 }
-
-const STATIC_IDS = new Set(MODELS.map((m) => m.id));
 
 let cachedModels: ModelOption[] | null = null;
 let cacheKey: string | null = null;
@@ -88,7 +92,7 @@ export async function fetchConcentrateModels(
 
         const json = (await res.json()) as { models: ConcentrateModel[] };
         const models: ModelOption[] = json.models
-            .filter((m) => m.id && !STATIC_IDS.has(m.id) && FLAGSHIP_IDS.has(m.id))
+            .filter((m) => m.id && FLAGSHIP_IDS.has(m.id))
             .map((m) => ({
                 id: m.id,
                 label: m.name || m.id,
