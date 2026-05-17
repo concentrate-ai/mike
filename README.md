@@ -115,6 +115,21 @@ Open `http://localhost:3000`.
 
 **DOC or DOCX conversion fails.** Install LibreOffice locally and restart the backend so document conversion commands are available on the process path.
 
+## Git Hooks
+
+This repo uses shared git hooks for pre-push quality checks. Enable them once:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+What runs on push:
+- **npm audit** — critical/high vulnerabilities are blocked, with a 24-hour grace period for newly published advisories (supply-chain defense)
+- **TypeScript type checking** — backend and frontend
+- **ESLint** — frontend
+
+To review known/accepted vulnerabilities see `.githooks/audit-known.json`.
+
 ## Useful Checks
 
 ```bash

@@ -1,0 +1,30 @@
+{
+  "pkg:next": {
+    "package": "next",
+    "severity": "critical",
+    "reason": "Next.js pinned at 16.0.3 by upstream. Upgrade to >=16.2.6 tracked separately. All CVEs are fixed in newer versions.",
+    "added": "2026-05-17",
+    "expires": "2026-08-17"
+  },
+  "pkg:protobufjs": {
+    "package": "protobufjs",
+    "severity": "high",
+    "reason": "Transitive dep via @google-cloud packages. Fixable with npm audit fix but requires upstream lockfile update.",
+    "added": "2026-05-17",
+    "expires": "2026-08-17"
+  },
+  "pkg:@xmldom/xmldom": {
+    "package": "@xmldom/xmldom",
+    "severity": "high",
+    "reason": "Transitive dep via docx/mammoth. Fixable with npm audit fix but requires upstream lockfile update.",
+    "added": "2026-05-17",
+    "expires": "2026-08-17"
+  },
+  "pkg:fast-xml-builder": {
+    "package": "fast-xml-builder",
+    "severity": "high",
+    "reason": "Transitive dep via @aws-sdk. Fixable with npm audit fix but requires upstream lockfile update.",
+    "added": "2026-05-17",
+    "expires": "2026-08-17"
+  }
+}
