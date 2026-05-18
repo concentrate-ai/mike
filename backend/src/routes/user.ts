@@ -5,10 +5,12 @@ import { DEFAULT_TABULAR_MODEL, resolveModel } from "../lib/llm";
 import {
   type ApiKeyStatus,
   getUserApiKeyStatus,
+  getUserApiKeys,
   hasEnvApiKey,
   normalizeApiKeyProvider,
   saveUserApiKey,
 } from "../lib/userApiKeys";
+import { verifyApiKey } from "../lib/verifyApiKey";
 
 export const userRouter = Router();
 
@@ -252,6 +254,25 @@ userRouter.put("/api-keys/:provider", requireAuth, async (req, res) => {
       error: err instanceof Error ? err.message : String(err),
     });
     res.status(500).json({ detail: "Failed to save API key" });
+  }
+});
+
+// POST /user/api-keys/:provider/verify
+userRouter.post("/api-keys/:provider/verify", requireAuth, async (_req, res) => {
+  const userId = res.locals.userId as string;
+  const provider = normalizeApiKeyProvider(_req.params.provider);
+  if (!provider)
+    return void res.status(400).json({ detail: "Unsupported provider" });
+
+  const db = createServerSupabase();
+  try {
+    const keys = await getUserApiKeys(userId, db);
+    const key = keys[provider]?.trim() ?? "";
+    const verified = await verifyApiKey(provider, key);
+    res.json({ verified });
+  } catch (err) {
+    console.error("[user/api-keys/verify]", err);
+    res.json({ verified: false });
   }
 });
 

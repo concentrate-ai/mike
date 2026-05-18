@@ -154,6 +154,16 @@ export async function saveApiKey(
     });
 }
 
+export async function verifyApiKey(
+    provider: ApiKeyProvider,
+): Promise<boolean> {
+    const res = await apiRequest<{ verified: boolean }>(
+        `/user/api-keys/${provider}/verify`,
+        { method: "POST" },
+    );
+    return res.verified;
+}
+
 export async function saveFavoriteModels(
     models: string[],
 ): Promise<{ favoriteModels: string[] }> {

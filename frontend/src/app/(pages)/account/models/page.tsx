@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Check, ChevronDown, Eye, EyeOff } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, ChevronDown, Eye, EyeOff, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,7 +13,8 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useUserProfile } from "@/contexts/UserProfileContext";
-import type { ApiKeyState } from "@/app/lib/mikeApi";
+import { verifyApiKey as verifyApiKeyRequest } from "@/app/lib/mikeApi";
+import type { ApiKeyProvider, ApiKeyState } from "@/app/lib/mikeApi";
 import { MODELS } from "@/app/lib/models";
 import {
     isModelAvailable,
@@ -102,6 +103,7 @@ export default function ModelsAndApiKeysPage() {
                     {API_KEY_FIELDS.map((field) => (
                         <ApiKeyField
                             key={field.provider}
+                            provider={field.provider as ApiKeyProvider}
                             label={field.label}
                             placeholder={field.placeholder}
                             description={"description" in field ? field.description : undefined}
@@ -220,6 +222,7 @@ function TabularModelDropdown({
 }
 
 function ApiKeyField({
+    provider,
     label,
     placeholder,
     description,
@@ -229,6 +232,7 @@ function ApiKeyField({
     onSave,
     onRemove,
 }: {
+    provider: ApiKeyProvider;
     label: string;
     placeholder: string;
     description?: string;
@@ -242,10 +246,29 @@ function ApiKeyField({
     const [reveal, setReveal] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [verified, setVerified] = useState<boolean | null>(null);
+    const [verifying, setVerifying] = useState(false);
+
+    const runVerify = async () => {
+        setVerifying(true);
+        try {
+            const ok = await verifyApiKeyRequest(provider);
+            setVerified(ok);
+        } catch {
+            setVerified(false);
+        } finally {
+            setVerifying(false);
+        }
+    };
 
     useEffect(() => {
         setValue("");
-    }, [hasSavedKey]);
+        if (hasSavedKey || isServerConfigured) {
+            runVerify();
+        } else {
+            setVerified(null);
+        }
+    }, [hasSavedKey, isServerConfigured]);
 
     const dirty = value.trim().length > 0;
 
@@ -257,6 +280,7 @@ function ApiKeyField({
             setValue("");
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
+            runVerify();
         } else {
             alert(`Failed to save ${label}.`);
         }
@@ -307,6 +331,24 @@ function ApiKeyField({
                 <p className="text-xs text-gray-500 mb-2">
                     A key is saved. Paste a new key to replace it.
                 </p>
+            )}
+            {verifying && (
+                <div className="flex items-center gap-1.5 mb-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
+                    <span className="text-xs text-gray-400">Verifying...</span>
+                </div>
+            )}
+            {!verifying && verified === true && (
+                <div className="flex items-center gap-1.5 mb-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                    <span className="text-xs text-green-600">Verified</span>
+                </div>
+            )}
+            {!verifying && verified === false && (
+                <div className="flex items-center gap-1.5 mb-2">
+                    <XCircle className="h-3.5 w-3.5 text-red-500" />
+                    <span className="text-xs text-red-500">Invalid key</span>
+                </div>
             )}
             <div className="flex gap-2">
                 <div className="relative flex-1">
