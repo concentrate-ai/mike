@@ -35,8 +35,12 @@ async function verifyOpenAI(key: string): Promise<boolean> {
 }
 
 async function verifyConcentrate(key: string): Promise<boolean> {
+    const base = process.env.CONCENTRATE_RESPONSES_URL?.trim()?.replace(
+        /\/responses$/,
+        "/models",
+    ) || "https://api.concentrate.ai/v1/models";
     const res = await withTimeout(
-        fetch("https://api.concentrate.ai/v1/models", {
+        fetch(base, {
             headers: { Authorization: `Bearer ${key}` },
         }),
     );

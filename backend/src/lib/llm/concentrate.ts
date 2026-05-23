@@ -7,11 +7,14 @@ import type {
     StreamChatResult,
 } from "./types";
 
-const CONCENTRATE_RESPONSES_URL = "https://api.concentrate.ai/v1/responses";
+const CONCENTRATE_RESPONSES_URL =
+    process.env.CONCENTRATE_RESPONSES_URL?.trim() ||
+    "https://api.concentrate.ai/v1/responses";
 const MAX_OUTPUT_TOKENS = 16384;
 
 type ResponseInputItem =
     | { role: "user" | "assistant"; content: string }
+    | { type: "function_call"; call_id: string; name: string; arguments: string }
     | { type: "function_call_output"; call_id: string; output: string };
 
 type ResponseFunctionTool = {
@@ -249,11 +252,21 @@ export async function streamConcentrate(
         }
 
         const results = await runTools(toolCalls);
-        input = results.map((result) => ({
-            type: "function_call_output",
-            call_id: result.tool_use_id,
-            output: result.content,
-        }));
+        input = [
+            ...input,
+            ...toolCalls.map((tc): ResponseInputItem => ({
+                type: "function_call" as const,
+                call_id: tc.id,
+                name: tc.name,
+                arguments: JSON.stringify(tc.input),
+            })),
+            ...results.map((result): ResponseInputItem => ({
+                type: "function_call_output" as const,
+                call_id: result.tool_use_id,
+                output: result.content,
+            })),
+        ];
+        previousResponseId = undefined;
     }
 
     return { fullText };
