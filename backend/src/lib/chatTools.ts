@@ -1594,6 +1594,15 @@ async function readDocumentContent(
                     `[read_document] docx mammoth fallback length=${text.length} for filename="${docInfo.filename}"`,
                 );
             }
+        } else if (
+            docInfo.file_type === "txt" ||
+            docInfo.file_type === "md" ||
+            docInfo.file_type === "csv"
+        ) {
+            text = Buffer.from(raw).toString("utf-8");
+            console.log(
+                `[read_document] plain text (${docInfo.file_type}) length=${text.length} for filename="${docInfo.filename}"`,
+            );
         } else {
             console.log(
                 `[read_document] unknown file_type="${docInfo.file_type}" for filename="${docInfo.filename}", trying mammoth`,

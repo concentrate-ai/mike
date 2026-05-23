@@ -1,21 +1,205 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Upload, Search, Loader2 } from "lucide-react";
+import {
+    X,
+    Upload,
+    Search,
+    Loader2,
+    HardDrive,
+    FolderOpen,
+    ChevronRight,
+    Check,
+    Folder,
+} from "lucide-react";
 import {
     uploadStandaloneDocument,
     uploadProjectDocument,
     addDocumentToProject,
     deleteDocument,
+    listHostFiles,
+    importHostFile,
 } from "@/app/lib/mikeApi";
+import type { HostFileEntry } from "@/app/lib/mikeApi";
 import type { MikeDocument } from "./types";
-import { FileDirectory } from "./FileDirectory";
+import { FileDirectory, DocFileIcon } from "./FileDirectory";
 import { useDirectoryData, invalidateDirectoryCache } from "./useDirectoryData";
 import { OwnerOnlyModal } from "./OwnerOnlyModal";
 import { useAuth } from "@/contexts/AuthContext";
 
 export { invalidateDirectoryCache };
+
+type Tab = "documents" | "host-files";
+
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function HostFileBrowser({
+    onImport,
+}: {
+    onImport: (doc: MikeDocument) => void;
+}) {
+    const [dirStack, setDirStack] = useState<string[]>([""]);
+    const [entries, setEntries] = useState<HostFileEntry[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [importing, setImporting] = useState<Set<string>>(new Set());
+    const [imported, setImported] = useState<Set<string>>(new Set());
+
+    const currentDir = dirStack[dirStack.length - 1];
+
+    const fetchDir = useCallback(async (dir: string) => {
+        setLoading(true);
+        try {
+            const result = await listHostFiles(dir || undefined);
+            setEntries(result.entries);
+        } catch {
+            setEntries([]);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchDir(currentDir);
+    }, [currentDir, fetchDir]);
+
+    function navigateInto(dirPath: string) {
+        setDirStack((prev) => [...prev, dirPath]);
+    }
+
+    function navigateBack() {
+        if (dirStack.length > 1) {
+            setDirStack((prev) => prev.slice(0, -1));
+        }
+    }
+
+    async function handleImport(entry: HostFileEntry) {
+        if (importing.has(entry.path) || imported.has(entry.path)) return;
+        setImporting((prev) => new Set([...prev, entry.path]));
+        try {
+            const doc = await importHostFile(entry.path);
+            invalidateDirectoryCache();
+            setImported((prev) => new Set([...prev, entry.path]));
+            onImport(doc);
+        } catch (err) {
+            console.error("Host file import failed:", err);
+        } finally {
+            setImporting((prev) => {
+                const next = new Set(prev);
+                next.delete(entry.path);
+                return next;
+            });
+        }
+    }
+
+    const breadcrumbParts = currentDir ? currentDir.split("/") : [];
+
+    return (
+        <div className="rounded-sm border border-gray-100 overflow-hidden">
+            {/* Navigation breadcrumb */}
+            {dirStack.length > 1 && (
+                <div className="flex items-center gap-1 px-2 py-2 text-xs text-gray-400 border-b border-gray-100">
+                    <button
+                        type="button"
+                        onClick={() => setDirStack([""])}
+                        className="hover:text-gray-600 transition-colors"
+                    >
+                        Host Files
+                    </button>
+                    {breadcrumbParts.map((part, i) => (
+                        <span key={i} className="flex items-center gap-1">
+                            <ChevronRight className="h-3 w-3" />
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setDirStack(
+                                        dirStack.slice(
+                                            0,
+                                            dirStack.indexOf(
+                                                breadcrumbParts
+                                                    .slice(0, i + 1)
+                                                    .join("/"),
+                                            ) + 1,
+                                        ),
+                                    )
+                                }
+                                className="hover:text-gray-600 transition-colors"
+                            >
+                                {part}
+                            </button>
+                        </span>
+                    ))}
+                    <button
+                        type="button"
+                        onClick={navigateBack}
+                        className="ml-auto text-xs text-gray-400 hover:text-gray-600"
+                    >
+                        Back
+                    </button>
+                </div>
+            )}
+
+            {loading ? (
+                <div className="py-8 flex justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                </div>
+            ) : entries.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-8">
+                    No files found
+                </p>
+            ) : (
+                entries.map((entry) => {
+                    const isImporting = importing.has(entry.path);
+                    const isImported = imported.has(entry.path);
+                    return (
+                        <button
+                            type="button"
+                            key={entry.path}
+                            onClick={() =>
+                                entry.type === "directory"
+                                    ? navigateInto(entry.path)
+                                    : handleImport(entry)
+                            }
+                            disabled={isImporting || isImported}
+                            className={`w-full flex items-center gap-2 px-2 py-2 text-xs transition-colors text-left ${
+                                isImported
+                                    ? "bg-green-50"
+                                    : "hover:bg-gray-50"
+                            } disabled:opacity-60`}
+                        >
+                            {entry.type === "directory" ? (
+                                <Folder className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                            ) : (
+                                <DocFileIcon fileType={entry.ext ?? null} />
+                            )}
+                            <span className="flex-1 truncate text-gray-700">
+                                {entry.name}
+                            </span>
+                            {entry.type === "file" && entry.size != null && (
+                                <span className="shrink-0 text-gray-300">
+                                    {formatBytes(entry.size)}
+                                </span>
+                            )}
+                            {entry.type === "directory" && (
+                                <ChevronRight className="h-3 w-3 text-gray-400 shrink-0" />
+                            )}
+                            {isImporting && (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400 shrink-0" />
+                            )}
+                            {isImported && (
+                                <Check className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                            )}
+                        </button>
+                    );
+                })
+            )}
+        </div>
+    );
+}
 
 interface Props {
     open: boolean;
@@ -38,14 +222,13 @@ export function AddDocumentsModal({
     const { user } = useAuth();
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [uploading, setUploading] = useState(false);
-    const [uploadingFilenames, setUploadingFilenames] = useState<string[]>([]);
     const [search, setSearch] = useState("");
     const [extraUploadedDocs, setExtraUploadedDocs] = useState<MikeDocument[]>([]);
-    // IDs deleted in this session — hidden locally since `useDirectoryData`'s
-    // cached state won't re-fetch until the modal reopens.
     const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
     const [ownerOnlyAction, setOwnerOnlyAction] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [activeTab, setActiveTab] = useState<Tab>("documents");
+    const [hostFilesAvailable, setHostFilesAvailable] = useState<boolean | null>(null);
 
     useEffect(() => {
         if (!open) return;
@@ -53,7 +236,10 @@ export function AddDocumentsModal({
         setSelectedIds(new Set());
         setExtraUploadedDocs([]);
         setDeletedIds(new Set());
-        setUploadingFilenames([]);
+        setActiveTab("documents");
+        listHostFiles()
+            .then(() => setHostFilesAvailable(true))
+            .catch(() => setHostFilesAvailable(false));
     }, [open]);
 
     if (!open) return null;
@@ -174,10 +360,14 @@ export function AddDocumentsModal({
         }
     }
 
+    function handleHostFileImported(doc: MikeDocument) {
+        setExtraUploadedDocs((prev) => [doc, ...prev]);
+        setSelectedIds((prev) => new Set([...prev, doc.id]));
+    }
+
     async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
         const files = Array.from(e.target.files || []);
         if (!files.length) return;
-        setUploadingFilenames(files.map((file) => file.name));
         setUploading(true);
         try {
             const uploaded = await Promise.all(
@@ -196,7 +386,6 @@ export function AddDocumentsModal({
             console.error("Upload failed:", err);
         } finally {
             setUploading(false);
-            setUploadingFilenames([]);
             if (fileInputRef.current) fileInputRef.current.value = "";
         }
     }
@@ -222,45 +411,80 @@ export function AddDocumentsModal({
                     </button>
                 </div>
 
-                {/* Search bar */}
-                <div className="px-4 pt-1 pb-2">
-                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                        <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                        <input
-                            type="text"
-                            placeholder="Search…"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="flex-1 bg-transparent text-sm text-gray-700 placeholder:text-gray-400 outline-none"
-                            autoFocus
-                        />
-                        {search && (
-                            <button
-                                onClick={() => setSearch("")}
-                                className="text-gray-400 hover:text-gray-600"
-                            >
-                                <X className="h-3.5 w-3.5" />
-                            </button>
-                        )}
+                {/* Tab bar — shown when host files are available */}
+                {hostFilesAvailable && (
+                    <div className="px-4 flex gap-1 border-b border-gray-100">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("documents")}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 -mb-px ${
+                                activeTab === "documents"
+                                    ? "border-gray-900 text-gray-900"
+                                    : "border-transparent text-gray-400 hover:text-gray-600"
+                            }`}
+                        >
+                            <FolderOpen className="h-3.5 w-3.5" />
+                            Documents
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("host-files")}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 -mb-px ${
+                                activeTab === "host-files"
+                                    ? "border-gray-900 text-gray-900"
+                                    : "border-transparent text-gray-400 hover:text-gray-600"
+                            }`}
+                        >
+                            <HardDrive className="h-3.5 w-3.5" />
+                            Host Files
+                        </button>
                     </div>
-                </div>
+                )}
 
-                {/* File browser */}
+                {/* Search bar — documents tab only */}
+                {activeTab === "documents" && (
+                    <div className="px-4 pt-1 pb-2">
+                        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                            <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                            <input
+                                type="text"
+                                placeholder="Search…"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="flex-1 bg-transparent text-sm text-gray-700 placeholder:text-gray-400 outline-none"
+                                autoFocus
+                            />
+                            {search && (
+                                <button
+                                    onClick={() => setSearch("")}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Content */}
                 <div className="flex-1 overflow-y-auto px-4 pb-2">
-                    <FileDirectory
-                        standaloneDocs={filteredStandalone}
-                        directoryProjects={filteredProjects}
-                        loading={loading}
-                        selectedIds={selectedIds}
-                        onChange={setSelectedIds}
-                        allowMultiple={allowMultiple}
-                        forceExpanded={!!q}
-                        emptyMessage={
-                            q ? "No matches found" : "No documents yet"
-                        }
-                        onDelete={handleDelete}
-                        uploadingFilenames={uploadingFilenames}
-                    />
+                    {activeTab === "documents" ? (
+                        <FileDirectory
+                            standaloneDocs={filteredStandalone}
+                            directoryProjects={filteredProjects}
+                            loading={loading}
+                            selectedIds={selectedIds}
+                            onChange={setSelectedIds}
+                            allowMultiple={allowMultiple}
+                            forceExpanded={!!q}
+                            emptyMessage={
+                                q ? "No matches found" : "No documents yet"
+                            }
+                            onDelete={handleDelete}
+                        />
+                    ) : (
+                        <HostFileBrowser onImport={handleHostFileImported} />
+                    )}
                 </div>
 
                 {/* Footer */}
@@ -269,7 +493,7 @@ export function AddDocumentsModal({
                         <input
                             ref={fileInputRef}
                             type="file"
-                            accept=".pdf,.docx,.doc"
+                            accept=".pdf,.docx,.doc,.txt,.md,.csv"
                             multiple
                             className="hidden"
                             onChange={handleUpload}

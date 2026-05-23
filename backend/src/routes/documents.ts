@@ -25,7 +25,7 @@ import { ensureDocAccess } from "../lib/access";
 import { singleFileUpload } from "../lib/upload";
 
 export const documentsRouter = Router();
-const ALLOWED_TYPES = new Set(["pdf", "docx", "doc"]);
+const ALLOWED_TYPES = new Set(["pdf", "docx", "doc", "txt", "md", "csv"]);
 
 // GET /single-documents
 documentsRouter.get("/", requireAuth, async (req, res) => {
@@ -421,10 +421,15 @@ documentsRouter.post(
       versionSlug,
       file.originalname,
     );
-    const contentType =
-      suffix === "pdf"
-        ? "application/pdf"
-        : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    const VERSION_MIME: Record<string, string> = {
+      pdf: "application/pdf",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      doc: "application/msword",
+      txt: "text/plain",
+      md: "text/markdown",
+      csv: "text/csv",
+    };
+    const contentType = VERSION_MIME[suffix] ?? "application/octet-stream";
     try {
       await uploadFile(
         key,
@@ -848,7 +853,7 @@ async function handleDocumentUpload(
     return void res
       .status(400)
       .json({
-        detail: `Unsupported file type: ${suffix}. Allowed: pdf, docx, doc`,
+        detail: `Unsupported file type: ${suffix}. Allowed: ${[...ALLOWED_TYPES].join(", ")}`,
       });
 
   const content = file.buffer;
@@ -872,10 +877,15 @@ async function handleDocumentUpload(
   try {
     const docId = doc.id as string;
     const key = storageKey(userId, docId, filename);
-    const contentType =
-      suffix === "pdf"
-        ? "application/pdf"
-        : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    const MIME_MAP: Record<string, string> = {
+      pdf: "application/pdf",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      doc: "application/msword",
+      txt: "text/plain",
+      md: "text/markdown",
+      csv: "text/csv",
+    };
+    const contentType = MIME_MAP[suffix] ?? "application/octet-stream";
     await uploadFile(
       key,
       content.buffer.slice(

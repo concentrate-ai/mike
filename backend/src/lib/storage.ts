@@ -16,22 +16,19 @@ import {
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl as awsGetSignedUrl } from "@aws-sdk/s3-request-presigner";
-
-let cachedClient: S3Client | undefined;
+import fs from "node:fs/promises";
+import path from "node:path";
 
 function getClient(): S3Client {
-  if (!cachedClient) {
-    cachedClient = new S3Client({
-      region: "auto",
-      endpoint: process.env.R2_ENDPOINT_URL!,
-      forcePathStyle: true,
-      credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-      },
-    });
-  }
-  return cachedClient;
+  return new S3Client({
+    region: "auto",
+    endpoint: process.env.R2_ENDPOINT_URL!,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    },
+  });
 }
 
 const BUCKET = process.env.R2_BUCKET_NAME ?? "mike";
@@ -42,12 +39,12 @@ export const storageEnabled = Boolean(
   process.env.R2_SECRET_ACCESS_KEY,
 );
 
-function requireStorageConfig(): void {
-  if (!storageEnabled) {
-    throw new Error(
-      "R2_ENDPOINT_URL, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY must be set",
-    );
-  }
+const LOCAL_STORAGE_DIR =
+  process.env.LOCAL_STORAGE_DIR ??
+  path.resolve(process.cwd(), "local-storage");
+
+function localPath(key: string): string {
+  return path.join(LOCAL_STORAGE_DIR, ...key.split("/"));
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +56,12 @@ export async function uploadFile(
   content: ArrayBuffer,
   contentType: string,
 ): Promise<void> {
-  requireStorageConfig();
+  if (!storageEnabled) {
+    const dest = localPath(key);
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.writeFile(dest, Buffer.from(content));
+    return;
+  }
   const client = getClient();
   await client.send(
     new PutObjectCommand({
@@ -76,7 +78,17 @@ export async function uploadFile(
 // ---------------------------------------------------------------------------
 
 export async function downloadFile(key: string): Promise<ArrayBuffer | null> {
-  if (!storageEnabled) return null;
+  if (!storageEnabled) {
+    try {
+      const buf = await fs.readFile(localPath(key));
+      return buf.buffer.slice(
+        buf.byteOffset,
+        buf.byteOffset + buf.byteLength,
+      ) as ArrayBuffer;
+    } catch {
+      return null;
+    }
+  }
   try {
     const client = getClient();
     const response = await client.send(
@@ -95,7 +107,12 @@ export async function downloadFile(key: string): Promise<ArrayBuffer | null> {
 // ---------------------------------------------------------------------------
 
 export async function deleteFile(key: string): Promise<void> {
-  if (!storageEnabled) return;
+  if (!storageEnabled) {
+    try {
+      await fs.unlink(localPath(key));
+    } catch {}
+    return;
+  }
   const client = getClient();
   await client.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
 }

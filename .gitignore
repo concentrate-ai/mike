@@ -17,4 +17,6 @@ next-env.d.ts
 .vercel
 coverage
 
+host-files/
+local-storage/
 .githooks/.audit-cache

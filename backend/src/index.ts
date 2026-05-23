@@ -12,6 +12,7 @@ import { workflowsRouter } from "./routes/workflows";
 import { userRouter } from "./routes/user";
 import { downloadsRouter } from "./routes/downloads";
 import { concentrateModelsRouter } from "./routes/concentrateModels";
+import { hostFilesRouter } from "./routes/hostFiles";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -122,6 +123,7 @@ app.use("/user", userRouter);
 app.use("/users", userRouter);
 app.use("/download", downloadsRouter);
 app.use("/concentrate/models", concentrateModelsRouter);
+app.use("/host-files", hostFilesRouter);
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
