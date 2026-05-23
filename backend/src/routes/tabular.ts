@@ -14,9 +14,9 @@ import {
     completeText,
     providerForModel,
     streamChatWithTools,
-    type Provider,
     type UserApiKeys,
 } from "../lib/llm";
+import { providerLabel } from "../lib/llm/providers";
 import { getUserModelSettings } from "../lib/userSettings";
 import {
     checkProjectAccess,
@@ -51,12 +51,6 @@ function formatPromptSuffix(format?: string, tags?: string[]): string {
 }
 
 export const tabularRouter = Router();
-
-function providerLabel(provider: Provider): string {
-    if (provider === "claude") return "Anthropic";
-    if (provider === "openai") return "OpenAI";
-    return "Gemini";
-}
 
 function missingModelApiKey(model: string, apiKeys: UserApiKeys) {
     const provider = providerForModel(model);

@@ -3,28 +3,26 @@ import { streamGemini, completeGeminiText } from "./gemini";
 import { streamOpenAI, completeOpenAIText } from "./openai";
 import { streamConcentrate, completeConcentrateText } from "./concentrate";
 import { providerForModel } from "./models";
+import { hasAnyKey } from "./providers";
 import type { StreamChatParams, StreamChatResult, UserApiKeys } from "./types";
 
 export * from "./types";
 export * from "./models";
 
-function hasNativeKey(provider: string, keys?: UserApiKeys): boolean {
-    if (provider === "claude") return !!(keys?.claude?.trim() || process.env.ANTHROPIC_API_KEY);
-    if (provider === "openai") return !!(keys?.openai?.trim() || process.env.OPENAI_API_KEY);
-    if (provider === "gemini") return !!(keys?.gemini?.trim() || process.env.GEMINI_API_KEY);
-    return false;
-}
-
-function hasConcentrateKey(keys?: UserApiKeys): boolean {
-    return !!(keys?.concentrate?.trim() || process.env.CONCENTRATE_API_KEY);
-}
-
+// Route a chat request to a provider adapter. Fallback policy: if the
+// model's native provider has no key configured (env or per-user) but
+// Concentrate does, route through Concentrate. This lets a single
+// Concentrate key cover Claude/Gemini/OpenAI requests without configuring
+// every native provider separately.
 export async function streamChatWithTools(
     params: StreamChatParams,
 ): Promise<StreamChatResult> {
     const provider = providerForModel(params.model);
     if (provider === "concentrate") return streamConcentrate(params);
-    if (!hasNativeKey(provider, params.apiKeys) && hasConcentrateKey(params.apiKeys)) {
+    if (
+        !hasAnyKey(provider, params.apiKeys) &&
+        hasAnyKey("concentrate", params.apiKeys)
+    ) {
         return streamConcentrate(params);
     }
     if (provider === "claude") return streamClaude(params);
@@ -40,9 +38,11 @@ export async function completeText(params: {
     apiKeys?: UserApiKeys;
 }): Promise<string> {
     const provider = providerForModel(params.model);
-    if (provider === "concentrate")
-        return completeConcentrateText(params);
-    if (!hasNativeKey(provider, params.apiKeys) && hasConcentrateKey(params.apiKeys)) {
+    if (provider === "concentrate") return completeConcentrateText(params);
+    if (
+        !hasAnyKey(provider, params.apiKeys) &&
+        hasAnyKey("concentrate", params.apiKeys)
+    ) {
         return completeConcentrateText(params);
     }
     if (provider === "claude") return completeClaudeText(params);

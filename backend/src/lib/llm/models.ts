@@ -1,3 +1,4 @@
+import { PROVIDERS } from "./providers";
 import type { Provider } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -42,10 +43,15 @@ const ALL_MODELS = new Set<string>([
 // Provider inference
 // ---------------------------------------------------------------------------
 
+// Infer a provider from a bare model id by consulting the registry's
+// modelIdPrefixes. The first provider whose prefixes match wins. If no
+// provider claims the id, fall through to Concentrate (the catch-all router).
 export function providerForModel(model: string): Provider {
-    if (model.startsWith("claude")) return "claude";
-    if (model.startsWith("gemini")) return "gemini";
-    if (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4")) return "openai";
+    for (const def of PROVIDERS) {
+        if (def.modelIdPrefixes.some((p) => model.startsWith(p))) {
+            return def.id;
+        }
+    }
     return "concentrate";
 }
 

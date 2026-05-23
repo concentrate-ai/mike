@@ -1,9 +1,10 @@
 import crypto from "crypto";
 import { createServerSupabase } from "./supabase";
-import type { UserApiKeys } from "./llm";
+import { PROVIDERS as PROVIDER_REGISTRY, providerDef } from "./llm/providers";
+import type { Provider, UserApiKeys } from "./llm";
 
 type Db = ReturnType<typeof createServerSupabase>;
-export type ApiKeyProvider = "claude" | "gemini" | "openai" | "concentrate";
+export type ApiKeyProvider = Provider;
 export type ApiKeySource = "user" | "env" | null;
 export type ApiKeyStatus = Record<ApiKeyProvider, boolean> & {
     sources: Record<ApiKeyProvider, ApiKeySource>;
@@ -16,23 +17,16 @@ type EncryptedKeyRow = {
     auth_tag: string;
 };
 
-const PROVIDERS: ApiKeyProvider[] = ["claude", "gemini", "openai", "concentrate"];
+const PROVIDERS: ApiKeyProvider[] = PROVIDER_REGISTRY.map((p) => p.id);
 
 function envApiKey(provider: ApiKeyProvider): string | null {
+    const fromRegistry = process.env[providerDef(provider).envKey]?.trim();
+    if (fromRegistry) return fromRegistry;
+    // Legacy alias kept for backward compatibility with earlier .env files.
     if (provider === "claude") {
-        return (
-            process.env.ANTHROPIC_API_KEY?.trim() ||
-            process.env.CLAUDE_API_KEY?.trim() ||
-            null
-        );
+        return process.env.CLAUDE_API_KEY?.trim() || null;
     }
-    if (provider === "openai") {
-        return process.env.OPENAI_API_KEY?.trim() || null;
-    }
-    if (provider === "concentrate") {
-        return process.env.CONCENTRATE_API_KEY?.trim() || null;
-    }
-    return process.env.GEMINI_API_KEY?.trim() || null;
+    return null;
 }
 
 export function hasEnvApiKey(provider: ApiKeyProvider): boolean {
