@@ -76,6 +76,17 @@ export const PROVIDERS: readonly ProviderDef[] = [
         // falls through to it. Leaving prefixes empty here keeps that behavior.
         modelIdPrefixes: [],
     },
+    {
+        id: "generic",
+        label: "Custom Endpoint",
+        envKey: "GENERIC_API_KEY",
+        envBaseUrl: "GENERIC_BASE_URL",
+        adapterType: "openai-responses",
+        // User-configured base URL + key. Covers LiteLLM, Ollama OpenAI shim,
+        // vLLM, TGI, and any other OpenAI-Responses-compatible endpoint.
+        // No modelIdPrefixes — models are identified by the user's own slugs.
+        modelIdPrefixes: [],
+    },
 ];
 
 const BY_ID = new Map<Provider, ProviderDef>(PROVIDERS.map((p) => [p.id, p]));

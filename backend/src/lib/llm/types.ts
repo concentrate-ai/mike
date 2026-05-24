@@ -2,7 +2,7 @@
 // Callers always speak OpenAI-style tools + { role, content } messages; each
 // provider translates internally.
 
-export type Provider = "claude" | "gemini" | "openai" | "concentrate";
+export type Provider = "claude" | "gemini" | "openai" | "concentrate" | "generic";
 
 export type OpenAIToolSchema = {
     type: "function";
@@ -41,6 +41,7 @@ export type UserApiKeys = {
     gemini?: string | null;
     openai?: string | null;
     concentrate?: string | null;
+    generic?: string | null;
 };
 
 export type StreamChatParams = {

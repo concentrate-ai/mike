@@ -17,6 +17,14 @@ type EncryptedKeyRow = {
     auth_tag: string;
 };
 
+// Only providers whose keys can be stored in the user_api_keys DB table.
+// "generic" uses env-only config (GENERIC_API_KEY / GENERIC_BASE_URL) and
+// has no DB row — keep it out of the saveable set.
+const DB_PROVIDERS: ApiKeyProvider[] = PROVIDER_REGISTRY
+    .filter((p) => p.id !== "generic")
+    .map((p) => p.id);
+
+// All providers (including generic) — used for env-key lookups only.
 const PROVIDERS: ApiKeyProvider[] = PROVIDER_REGISTRY.map((p) => p.id);
 
 function envApiKey(provider: ApiKeyProvider): string | null {
@@ -78,7 +86,7 @@ function decrypt(row: EncryptedKeyRow): string | null {
 }
 
 function isProvider(value: string): value is ApiKeyProvider {
-    return (PROVIDERS as string[]).includes(value);
+    return (DB_PROVIDERS as string[]).includes(value);
 }
 
 export function normalizeApiKeyProvider(value: string): ApiKeyProvider | null {
@@ -89,23 +97,18 @@ export async function getUserApiKeyStatus(
     userId: string,
     db: Db = createServerSupabase(),
 ): Promise<ApiKeyStatus> {
-    const status: ApiKeyStatus = {
-        claude: false,
-        gemini: false,
-        openai: false,
-        concentrate: false,
-        sources: {
-            claude: null,
-            gemini: null,
-            openai: null,
-            concentrate: null,
-        },
-    };
+    const status = Object.fromEntries(
+        PROVIDERS.map((p) => [p, false]),
+    ) as Record<ApiKeyProvider, boolean>;
+    const sources = Object.fromEntries(
+        PROVIDERS.map((p) => [p, null]),
+    ) as Record<ApiKeyProvider, ApiKeySource>;
+    const fullStatus: ApiKeyStatus = { ...status, sources };
 
     for (const provider of PROVIDERS) {
         if (hasEnvApiKey(provider)) {
-            status[provider] = true;
-            status.sources[provider] = "env";
+            fullStatus[provider] = true;
+            fullStatus.sources[provider] = "env";
         }
     }
 
@@ -117,13 +120,13 @@ export async function getUserApiKeyStatus(
 
     for (const row of data ?? []) {
         const provider = normalizeApiKeyProvider(String(row.provider));
-        if (provider && !status[provider]) {
-            status[provider] = true;
-            status.sources[provider] = "user";
+        if (provider && !fullStatus[provider]) {
+            fullStatus[provider] = true;
+            fullStatus.sources[provider] = "user";
         }
     }
 
-    return status;
+    return fullStatus;
 }
 
 export async function getUserApiKeys(
@@ -135,6 +138,7 @@ export async function getUserApiKeys(
         gemini: envApiKey("gemini"),
         openai: envApiKey("openai"),
         concentrate: envApiKey("concentrate"),
+        generic: envApiKey("generic"),
     };
 
     const { data, error } = await db
