@@ -105,7 +105,12 @@ export interface UserProfile {
     creditsRemaining: number;
     tier: string;
     tabularModel: string;
+    highModel: string | null;
+    mediumModel: string | null;
+    lowModel: string | null;
+    enabledModels: string[];
     favoriteModels: string[];
+    customModels: unknown[];
     apiKeyStatus: ApiKeyStatus;
 }
 
@@ -117,7 +122,7 @@ export async function updateUserProfile(payload: {
     displayName?: string | null;
     organisation?: string | null;
     tabularModel?: string;
-}): Promise<UserProfile> {
+}): Promise<UserProfile & { apiKeyStatus: ApiKeyStatus }> {
     return apiRequest<UserProfile>("/user/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -173,6 +178,67 @@ export async function saveFavoriteModels(
         body: JSON.stringify({ models }),
     });
 }
+
+export async function saveTierModels(payload: {
+    highModel?: string | null;
+    mediumModel?: string | null;
+    lowModel?: string | null;
+}): Promise<UserProfile> {
+    return apiRequest<UserProfile>("/user/tier-models", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function saveEnabledModels(
+    models: string[],
+): Promise<UserProfile> {
+    return apiRequest<UserProfile>("/user/enabled-models", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ models }),
+    });
+}
+
+export async function saveCustomModels(
+    models: unknown[],
+): Promise<{ customModels: unknown[] }> {
+    return apiRequest<{ customModels: unknown[] }>("/user/custom-models", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ models }),
+    });
+}
+
+export async function fetchProviderModels(
+    providerId: string,
+): Promise<CatalogModel[]> {
+    const res = await apiRequest<{ models: CatalogModel[] }>(
+        `/providers/${providerId}/models`,
+    );
+    return res.models;
+}
+
+export type CatalogModel = {
+    provider: string;
+    id: string;
+    display_name: string;
+    description?: string;
+    context_window?: number;
+    max_output_tokens?: number;
+    supports_tools?: boolean;
+    supports_streaming?: boolean;
+    supports_images?: boolean;
+    supports_pdf?: boolean;
+    supports_reasoning?: boolean;
+    supports_json_output?: boolean;
+    supports_web_search?: boolean;
+    zdr?: boolean;
+    input_price_per_m?: number | null;
+    output_price_per_m?: number | null;
+    is_custom?: boolean;
+};
 
 export async function getProject(projectId: string): Promise<MikeProject> {
     return apiRequest<MikeProject>(`/projects/${projectId}`);
@@ -584,6 +650,7 @@ export async function createTabularReview(payload: {
     columns_config: { index: number; name: string; prompt: string }[];
     workflow_id?: string;
     project_id?: string;
+    model?: string;
 }): Promise<TabularReview> {
     return apiRequest<TabularReview>("/tabular-review", {
         method: "POST",
