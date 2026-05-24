@@ -2839,7 +2839,9 @@ export async function runLLMStream(params: {
         citationsOpenSeen = false;
     };
 
-    const selectedModel = resolveModel(model, DEFAULT_MAIN_MODEL, !!apiKeys?.concentrate?.trim());
+    // Pass the model id as-is — may be bare or provider-qualified.
+    // streamChatWithTools / pick() strips the qualifier and routes correctly.
+    const selectedModel = model ?? DEFAULT_MAIN_MODEL;
 
     await streamChatWithTools({
         model: selectedModel,

@@ -653,7 +653,7 @@ export function TRChatPanel({
 }: Props) {
     const { profile, updateModelPreference, toggleFavoriteModel } = useUserProfile();
     const apiKeys = profile?.apiKeys;
-    const { models } = useModels(apiKeys);
+    const { models } = useModels(profile?.enabledModels, profile?.favoriteModels);
     const currentModel = profile?.tabularModel ?? "gemini-3-flash-preview";
     const [apiKeyModalProvider, setApiKeyModalProvider] =
         useState<ModelProvider | null>(null);

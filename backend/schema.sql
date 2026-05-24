@@ -18,6 +18,12 @@ create table if not exists public.user_profiles (
   message_credits_used integer not null default 0,
   credits_reset_date timestamptz not null default (now() + interval '30 days'),
   tabular_model text not null default 'gemini-3-flash-preview',
+  high_model   text,
+  medium_model text,
+  low_model    text,
+  enabled_models  jsonb not null default '[]'::jsonb,
+  favorite_models jsonb not null default '[]'::jsonb,
+  custom_models   jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -287,6 +293,7 @@ create table if not exists public.tabular_reviews (
   workflow_id uuid references public.workflows(id) on delete set null,
   practice text,
   shared_with jsonb not null default '[]'::jsonb,
+  model text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

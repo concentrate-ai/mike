@@ -14,6 +14,7 @@ import {
 } from "@/app/lib/mikeApi";
 import { FileDirectory } from "../shared/FileDirectory";
 import { BUILT_IN_WORKFLOWS } from "../workflows/builtinWorkflows";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 
 interface Props {
     open: boolean;
@@ -23,12 +24,57 @@ interface Props {
         projectId?: string,
         documentIds?: string[],
         columnsConfig?: MikeWorkflow["columns_config"],
+        model?: string,
     ) => void;
     projects?: MikeProject[];
     /** When provided, skip the project/directory picker and show only these docs */
     projectDocs?: MikeDocument[];
     projectName?: string;
     projectCmNumber?: string | null;
+}
+
+// Tier options shown at the top of the model picker
+const TIER_OPTIONS = [
+    { value: "high", label: "High" },
+    { value: "medium", label: "Medium" },
+    { value: "low", label: "Low" },
+] as const;
+
+type ProfileLike = {
+    highModel?: string | null;
+    mediumModel?: string | null;
+    lowModel?: string | null;
+} | null | undefined;
+
+function resolvedTierSuffix(tier: "high" | "medium" | "low", profile: ProfileLike): string {
+    const val =
+        tier === "high"
+            ? profile?.highModel
+            : tier === "medium"
+              ? profile?.mediumModel
+              : profile?.lowModel;
+    if (!val) return "";
+    // Strip provider prefix for display
+    const slug = val.includes(":") ? val.split(":")[1] : val;
+    return ` (${slug})`;
+}
+
+function tierOptionLabel(tier: string, profile: ProfileLike): string {
+    const labels: Record<string, string> = { high: "High", medium: "Medium", low: "Low" };
+    const base = labels[tier] ?? tier;
+    if (tier === "medium") return `${base}${resolvedTierSuffix("medium", profile)} — default`;
+    if (tier === "high") return `${base}${resolvedTierSuffix("high", profile)}`;
+    if (tier === "low") return `${base}${resolvedTierSuffix("low", profile)}`;
+    return base;
+}
+
+function modelPickerLabel(value: string, profile: ProfileLike): string {
+    if (value === "high" || value === "medium" || value === "low") {
+        return tierOptionLabel(value, profile);
+    }
+    // Qualified slug
+    const slug = value.includes(":") ? value.split(":")[1] : value;
+    return slug;
 }
 
 export function AddNewTRModal({
@@ -40,10 +86,14 @@ export function AddNewTRModal({
     projectName,
     projectCmNumber,
 }: Props) {
+    const { profile } = useUserProfile();
     const isProjectMode = fixedProjectDocs !== undefined;
     const [title, setTitle] = useState("");
     const [underProject, setUnderProject] = useState(false);
     const [selectedProjectId, setSelectedProjectId] = useState("");
+    // "medium" is the default tier; user can override to a tier name or a qualified slug
+    const [selectedModel, setSelectedModel] = useState<string>("medium");
+    const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
     const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
 
     // Project-scoped docs (when underProject is true and no fixedProjectDocs)
@@ -126,6 +176,8 @@ export function AddNewTRModal({
         setSelectedDocIds(new Set());
         setSelectedWorkflowId(null);
         setWorkflowDropdownOpen(false);
+        setSelectedModel("medium");
+        setModelDropdownOpen(false);
         onClose();
     }
 
@@ -136,11 +188,14 @@ export function AddNewTRModal({
         const selectedWorkflow = workflows.find(
             (w) => w.id === selectedWorkflowId,
         );
+        // "medium" (the default) is omitted so the backend uses its own default
+        const modelToSend = selectedModel === "medium" ? undefined : selectedModel;
         onAdd(
             title.trim(),
             underProject ? selectedProjectId : undefined,
             selectedDocIds.size > 0 ? [...selectedDocIds] : undefined,
             selectedWorkflow?.columns_config ?? undefined,
+            modelToSend,
         );
         handleClose();
     }
@@ -341,6 +396,78 @@ export function AddNewTRModal({
                                                 )}
                                             </button>
                                         ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Model picker */}
+                        <div className="space-y-2">
+                            <p className="text-xs font-medium text-gray-700">
+                                Model
+                            </p>
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setModelDropdownOpen((o) => !o)}
+                                    className="flex items-center justify-between w-full rounded-lg border border-gray-200 px-3 py-2 text-sm hover:border-gray-400 focus:outline-none bg-white transition-colors"
+                                >
+                                    <span className="text-gray-800 truncate">
+                                        {modelPickerLabel(selectedModel, profile)}
+                                    </span>
+                                    <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0 ml-2" />
+                                </button>
+                                {modelDropdownOpen && (
+                                    <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-xl border border-gray-100 bg-white shadow-lg overflow-y-auto max-h-64">
+                                        {/* Tier section */}
+                                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-400 font-medium">
+                                            By tier
+                                        </div>
+                                        {TIER_OPTIONS.map((t) => (
+                                            <button
+                                                key={t.value}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedModel(t.value);
+                                                    setModelDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left flex items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-gray-50 ${selectedModel === t.value ? "bg-gray-50 text-gray-900" : "text-gray-700"}`}
+                                            >
+                                                <span className="flex-1">
+                                                    {tierOptionLabel(t.value, profile)}
+                                                </span>
+                                                {selectedModel === t.value && (
+                                                    <Check className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                                                )}
+                                            </button>
+                                        ))}
+                                        {/* Specific model section */}
+                                        {(profile?.enabledModels ?? []).length > 0 && (
+                                            <>
+                                                <div className="border-t border-gray-100 mt-1" />
+                                                <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-400 font-medium">
+                                                    Specific model
+                                                </div>
+                                                {(profile?.enabledModels ?? []).map((qid) => (
+                                                    <button
+                                                        key={qid}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedModel(qid);
+                                                            setModelDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left flex items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-gray-50 ${selectedModel === qid ? "bg-gray-50 text-gray-900" : "text-gray-700"}`}
+                                                    >
+                                                        <span className="flex-1 font-mono text-xs">
+                                                            {qid}
+                                                        </span>
+                                                        {selectedModel === qid && (
+                                                            <Check className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </>
+                                        )}
                                     </div>
                                 )}
                             </div>

@@ -16,6 +16,9 @@ import {
     getUserProfile,
     saveApiKey,
     saveFavoriteModels,
+    saveEnabledModels,
+    saveTierModels,
+    saveCustomModels,
     updateUserProfile,
 } from "@/app/lib/mikeApi";
 
@@ -27,7 +30,12 @@ interface UserProfile {
     creditsRemaining: number;
     tier: string;
     tabularModel: string;
+    highModel: string | null;
+    mediumModel: string | null;
+    lowModel: string | null;
+    enabledModels: string[];
     favoriteModels: string[];
+    customModels: unknown[];
     apiKeys: ApiKeyState;
 }
 
@@ -40,11 +48,17 @@ interface UserProfileContextType {
         field: "tabularModel",
         value: string,
     ) => Promise<boolean>;
+    updateTierModel: (
+        tier: "high" | "medium" | "low",
+        value: string | null,
+    ) => Promise<boolean>;
     updateApiKey: (
         provider: ApiKeyProvider,
         value: string | null,
     ) => Promise<boolean>;
     toggleFavoriteModel: (modelId: string) => Promise<boolean>;
+    setEnabledModels: (models: string[]) => Promise<boolean>;
+    setCustomModels: (models: unknown[]) => Promise<boolean>;
     reloadProfile: () => Promise<void>;
     incrementMessageCredits: () => Promise<boolean>;
 }
@@ -92,20 +106,22 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
             const profileData = await getUserProfile();
             setProfile(toProfile(profileData));
         } catch {
-            // Calculate a default future reset date for fallback
             const futureResetDate = new Date();
             futureResetDate.setDate(futureResetDate.getDate() + 30);
-
-            // Set fallback profile data on exception
             setProfile({
                 displayName: null,
                 organisation: null,
                 messageCreditsUsed: 0,
                 creditsResetDate: futureResetDate.toISOString(),
-                creditsRemaining: 999999, // temporarily unlimited
+                creditsRemaining: 999999,
                 tier: "Free",
                 tabularModel: "gemini-3-flash-preview",
+                highModel: null,
+                mediumModel: null,
+                lowModel: null,
+                enabledModels: [],
                 favoriteModels: [],
+                customModels: [],
                 apiKeys: emptyApiKeys(),
             });
         } finally {
@@ -125,10 +141,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
     const updateDisplayName = useCallback(
         async (displayName: string): Promise<boolean> => {
-            if (!user) {
-                return false;
-            }
-
+            if (!user) return false;
             try {
                 const updated = await updateUserProfile({ displayName });
                 setProfile((prev) =>
@@ -163,9 +176,29 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
             if (!user) return false;
             if (field !== "tabularModel") return false;
             try {
-                const updated = await updateUserProfile({
-                    tabularModel: value,
-                });
+                const updated = await updateUserProfile({ tabularModel: value });
+                setProfile((prev) =>
+                    prev ? { ...prev, ...toProfile(updated) } : null,
+                );
+                return true;
+            } catch {
+                return false;
+            }
+        },
+        [user],
+    );
+
+    const updateTierModel = useCallback(
+        async (tier: "high" | "medium" | "low", value: string | null): Promise<boolean> => {
+            if (!user) return false;
+            try {
+                const payload =
+                    tier === "high"
+                        ? { highModel: value }
+                        : tier === "medium"
+                          ? { mediumModel: value }
+                          : { lowModel: value };
+                const updated = await saveTierModels(payload);
                 setProfile((prev) =>
                     prev ? { ...prev, ...toProfile(updated) } : null,
                 );
@@ -211,16 +244,13 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     const toggleFavoriteModel = useCallback(
         async (modelId: string): Promise<boolean> => {
             if (!user || !profile) return false;
-
             const current = profile.favoriteModels;
             const next = current.includes(modelId)
                 ? current.filter((id) => id !== modelId)
                 : [...current, modelId];
-
             setProfile((prev) =>
                 prev ? { ...prev, favoriteModels: next } : null,
             );
-
             try {
                 await saveFavoriteModels(next);
                 return true;
@@ -234,22 +264,46 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         [user, profile],
     );
 
+    const setEnabledModels = useCallback(
+        async (models: string[]): Promise<boolean> => {
+            if (!user) return false;
+            const prev = profile?.enabledModels ?? [];
+            setProfile((p) => (p ? { ...p, enabledModels: models } : null));
+            try {
+                const updated = await saveEnabledModels(models);
+                setProfile((p) => (p ? { ...p, ...toProfile(updated) } : null));
+                return true;
+            } catch {
+                setProfile((p) => (p ? { ...p, enabledModels: prev } : null));
+                return false;
+            }
+        },
+        [user, profile],
+    );
+
+    const setCustomModels = useCallback(
+        async (models: unknown[]): Promise<boolean> => {
+            if (!user) return false;
+            const prev = profile?.customModels ?? [];
+            setProfile((p) => (p ? { ...p, customModels: models } : null));
+            try {
+                await saveCustomModels(models);
+                return true;
+            } catch {
+                setProfile((p) => (p ? { ...p, customModels: prev } : null));
+                return false;
+            }
+        },
+        [user, profile],
+    );
+
     const reloadProfile = useCallback(async () => {
-        if (user) {
-            await loadProfile();
-        }
+        if (user) await loadProfile();
     }, [user, loadProfile]);
 
     const incrementMessageCredits = useCallback(async (): Promise<boolean> => {
-        if (!user || !profile) {
-            return false;
-        }
-
-        // Check if user has credits remaining
-        if (profile.creditsRemaining <= 0) {
-            return false;
-        }
-
+        if (!user || !profile) return false;
+        if (profile.creditsRemaining <= 0) return false;
         return false;
     }, [user, profile]);
 
@@ -261,8 +315,11 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
                 updateDisplayName,
                 updateOrganisation,
                 updateModelPreference,
+                updateTierModel,
                 updateApiKey,
                 toggleFavoriteModel,
+                setEnabledModels,
+                setCustomModels,
                 reloadProfile,
                 incrementMessageCredits,
             }}

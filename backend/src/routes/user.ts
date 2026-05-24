@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../middleware/auth";
 import { createServerSupabase } from "../lib/supabase";
 import { DEFAULT_TABULAR_MODEL, resolveModel } from "../lib/llm";
+import { inferTier } from "../lib/llm/routing";
 import {
   type ApiKeyStatus,
   getUserApiKeyStatus,
@@ -23,7 +24,12 @@ type UserProfileRow = {
   credits_reset_date: string;
   tier: string;
   tabular_model: string;
+  high_model: string | null;
+  medium_model: string | null;
+  low_model: string | null;
+  enabled_models: string[];
   favorite_models: string[];
+  custom_models: unknown[];
 };
 
 function serializeProfile(
@@ -39,10 +45,18 @@ function serializeProfile(
     creditsRemaining: Math.max(MONTHLY_CREDIT_LIMIT - creditsUsed, 0),
     tier: row.tier || "Free",
     tabularModel: resolveModel(row.tabular_model, DEFAULT_TABULAR_MODEL),
+    highModel: row.high_model ?? null,
+    mediumModel: row.medium_model ?? null,
+    lowModel: row.low_model ?? null,
+    enabledModels: Array.isArray(row.enabled_models) ? row.enabled_models : [],
     favoriteModels: Array.isArray(row.favorite_models) ? row.favorite_models : [],
+    customModels: Array.isArray(row.custom_models) ? row.custom_models : [],
     ...(apiKeyStatus ? { apiKeyStatus } : {}),
   };
 }
+
+const PROFILE_SELECT =
+  "display_name, organisation, message_credits_used, credits_reset_date, tier, tabular_model, high_model, medium_model, low_model, enabled_models, favorite_models, custom_models";
 
 function validateProfilePayload(body: unknown):
   | {
@@ -125,9 +139,7 @@ async function loadProfile(
 ) {
   let { data, error } = await db
     .from("user_profiles")
-    .select(
-      "display_name, organisation, message_credits_used, credits_reset_date, tier, tabular_model, favorite_models",
-    )
+    .select(PROFILE_SELECT)
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -142,9 +154,7 @@ async function loadProfile(
 
     const created = await db
       .from("user_profiles")
-      .select(
-        "display_name, organisation, message_credits_used, credits_reset_date, tier, tabular_model, favorite_models",
-      )
+      .select(PROFILE_SELECT)
       .eq("user_id", userId)
       .single();
     if (created.error) return { data: null, error: created.error };
@@ -163,9 +173,7 @@ async function loadProfile(
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", userId)
-      .select(
-        "display_name, organisation, message_credits_used, credits_reset_date, tier, tabular_model, favorite_models",
-      )
+      .select(PROFILE_SELECT)
       .single();
 
     if (resetError) return { data: null, error: resetError };
@@ -218,6 +226,116 @@ userRouter.patch("/profile", requireAuth, async (req, res) => {
   if (error) return void res.status(500).json({ detail: error.message });
   const apiKeyStatus = await getUserApiKeyStatus(userId, db);
   res.json({ ...data, apiKeyStatus });
+});
+
+// PUT /user/tier-models — update high/medium/low model preferences
+userRouter.put("/tier-models", requireAuth, async (req, res) => {
+  const userId = res.locals.userId as string;
+  const body = req.body;
+  if (!body || typeof body !== "object") {
+    return void res.status(400).json({ detail: "Expected a JSON object" });
+  }
+
+  const raw = body as Record<string, unknown>;
+  const update: {
+    high_model?: string | null;
+    medium_model?: string | null;
+    low_model?: string | null;
+    updated_at: string;
+  } = { updated_at: new Date().toISOString() };
+
+  for (const tier of ["high", "medium", "low"] as const) {
+    const field = `${tier}Model` as "highModel" | "mediumModel" | "lowModel";
+    if (field in raw) {
+      const val = raw[field];
+      if (val !== null && typeof val !== "string") {
+        return void res.status(400).json({ detail: `${field} must be a string or null` });
+      }
+      const col = `${tier}_model` as "high_model" | "medium_model" | "low_model";
+      update[col] = typeof val === "string" ? val.trim() || null : null;
+    }
+  }
+
+  const db = createServerSupabase();
+  const ensureError = await ensureProfileRow(db, userId);
+  if (ensureError) return void res.status(500).json({ detail: ensureError.message });
+
+  const { error } = await db
+    .from("user_profiles")
+    .update(update)
+    .eq("user_id", userId);
+  if (error) return void res.status(500).json({ detail: error.message });
+
+  const { data, profileError } = await (async () => {
+    const r = await loadProfile(db, userId);
+    return { data: r.data, profileError: r.error };
+  })();
+  if (profileError) return void res.status(500).json({ detail: profileError.message });
+  const apiKeyStatus = await getUserApiKeyStatus(userId, db);
+  res.json({ ...data, apiKeyStatus });
+});
+
+// PUT /user/enabled-models — replace the full enabled_models array
+userRouter.put("/enabled-models", requireAuth, async (req, res) => {
+  const userId = res.locals.userId as string;
+  const models = req.body?.models;
+  if (!Array.isArray(models) || models.some((m: unknown) => typeof m !== "string")) {
+    return void res.status(400).json({ detail: "models must be an array of strings" });
+  }
+  const db = createServerSupabase();
+  const ensureError = await ensureProfileRow(db, userId);
+  if (ensureError) return void res.status(500).json({ detail: ensureError.message });
+
+  // Auto-tier: when a model is newly enabled, fill any null tier column.
+  const { data: existing } = await db
+    .from("user_profiles")
+    .select("high_model, medium_model, low_model, enabled_models")
+    .eq("user_id", userId)
+    .single();
+  const prev: string[] = Array.isArray(existing?.enabled_models) ? existing.enabled_models : [];
+  const newIds = models.filter((m: string) => !prev.includes(m));
+
+  const tierUpdate: { high_model?: string; medium_model?: string; low_model?: string } = {};
+  for (const id of newIds) {
+    const tier = inferTier(id);
+    if (!tier) continue;
+    const col = `${tier}_model` as "high_model" | "medium_model" | "low_model";
+    if (!existing?.[col] && !tierUpdate[col]) {
+      tierUpdate[col] = id;
+    }
+  }
+
+  const { error } = await db
+    .from("user_profiles")
+    .update({
+      enabled_models: models,
+      ...tierUpdate,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
+  if (error) return void res.status(500).json({ detail: error.message });
+
+  const { data } = await loadProfile(db, userId);
+  const apiKeyStatus = await getUserApiKeyStatus(userId, db);
+  res.json({ ...data, apiKeyStatus });
+});
+
+// PUT /user/custom-models — replace the full custom_models array
+userRouter.put("/custom-models", requireAuth, async (req, res) => {
+  const userId = res.locals.userId as string;
+  const models = req.body?.models;
+  if (!Array.isArray(models)) {
+    return void res.status(400).json({ detail: "models must be an array" });
+  }
+  const db = createServerSupabase();
+  const ensureError = await ensureProfileRow(db, userId);
+  if (ensureError) return void res.status(500).json({ detail: ensureError.message });
+  const { error } = await db
+    .from("user_profiles")
+    .update({ custom_models: models, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+  if (error) return void res.status(500).json({ detail: error.message });
+  res.json({ customModels: models });
 });
 
 // GET /user/api-keys

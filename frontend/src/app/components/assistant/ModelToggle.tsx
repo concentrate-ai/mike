@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, Check, AlertCircle, Star, Shield } from "lucide-react";
 import {
     DropdownMenu,
@@ -10,37 +10,73 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { isModelAvailable } from "@/app/lib/modelAvailability";
 import type { ApiKeyState } from "@/app/lib/mikeApi";
-import { MODELS, type ModelOption } from "@/app/lib/models";
-import { fetchConcentrateModels } from "@/app/lib/concentrateModels";
+import type { ModelOption } from "@/app/lib/models";
+import { MODELS } from "@/app/lib/models";
 
+// Re-export for callers that still import from here
 export { MODELS, type ModelOption } from "@/app/lib/models";
 export { DEFAULT_MODEL_ID, ALLOWED_MODEL_IDS } from "@/app/lib/models";
 
-export function useModels(apiKeys?: ApiKeyState): {
+const PROVIDER_LABELS: Record<string, string> = {
+    concentrate: "Concentrate",
+    claude: "Anthropic",
+    gemini: "Google",
+    openai: "OpenAI",
+    generic: "Custom",
+};
+
+function qualifiedIdToOption(qid: string): ModelOption | null {
+    const colon = qid.indexOf(":");
+    if (colon === -1) {
+        // Legacy bare id — fall back to hardcoded MODELS list
+        return MODELS.find((m) => m.id === qid) ?? null;
+    }
+    const provider = qid.slice(0, colon);
+    const slug = qid.slice(colon + 1);
+    const group = PROVIDER_LABELS[provider] ?? provider;
+    // Pretty-print: try to match a known label from the hardcoded list first
+    const known = MODELS.find((m) => m.id === slug);
+    return {
+        id: qid,          // use qualified id so routing knows the provider
+        label: known?.label ?? slug,
+        group,
+        zdr: known?.zdr,
+    };
+}
+
+/**
+ * Build the model list for the assistant dropdown from the user's enabled_models.
+ * Falls back to the hardcoded MODELS list if enabledModels is empty (new user
+ * before they visit the catalog, or legacy session).
+ */
+export function useModels(
+    enabledModels?: string[],
+    favoriteModels?: string[],
+): {
     models: ModelOption[];
     dynamicIds: Set<string>;
 } {
-    const [concentrateModels, setConcentrateModels] = useState<ModelOption[]>([]);
-
-    useEffect(() => {
-        if (!apiKeys?.concentrate?.configured) {
-            setConcentrateModels([]);
-            return;
-        }
-        fetchConcentrateModels(apiKeys).then(setConcentrateModels).catch(() => {});
-    }, [apiKeys?.concentrate?.configured]);
-
     return useMemo(() => {
-        const dynamicIds = new Set(concentrateModels.map((m) => m.id));
-        const enriched = MODELS.map((m) => {
-            const dyn = concentrateModels.find((d) => d.id === m.id);
-            return dyn ? { ...m, zdr: dyn.zdr } : m;
-        });
-        const extra = concentrateModels.filter((m) => !MODELS.some((s) => s.id === m.id));
-        return { models: [...enriched, ...extra], dynamicIds };
-    }, [concentrateModels]);
+        const source = enabledModels && enabledModels.length > 0 ? enabledModels : null;
+
+        if (!source) {
+            // Fallback: hardcoded list with bare ids (legacy behaviour)
+            return {
+                models: MODELS,
+                dynamicIds: new Set(MODELS.map((m) => m.id)),
+            };
+        }
+
+        const models = source
+            .map(qualifiedIdToOption)
+            .filter((m): m is ModelOption => m !== null);
+
+        return {
+            models,
+            dynamicIds: new Set(models.map((m) => m.id)),
+        };
+    }, [enabledModels]);
 }
 
 interface Props {
@@ -66,9 +102,6 @@ export function ModelToggle({
     const items = models ?? MODELS;
     const selected = items.find((m) => m.id === value);
     const selectedLabel = selected?.label ?? "Model";
-    const selectedAvailable = apiKeys
-        ? isModelAvailable(value, apiKeys)
-        : true;
 
     const favoritesSet = useMemo(() => new Set(favoriteModels), [favoriteModels]);
 
@@ -83,9 +116,7 @@ export function ModelToggle({
     }, [items, favoritesSet]);
 
     const itemsForGroup = (group: string) => {
-        if (group === "Favorites") {
-            return items.filter((m) => favoritesSet.has(m.id));
-        }
+        if (group === "Favorites") return items.filter((m) => favoritesSet.has(m.id));
         return items.filter((m) => m.group === group);
     };
 
@@ -95,15 +126,8 @@ export function ModelToggle({
                 <button
                     type="button"
                     className={`flex items-center gap-1.5 rounded-lg px-2 h-8 text-sm transition-colors cursor-pointer text-gray-400 hover:bg-gray-100 hover:text-gray-700 ${isOpen ? "bg-gray-100 text-gray-700" : ""}`}
-                    title={
-                        !selectedAvailable
-                            ? "API key missing for selected model"
-                            : "Choose model"
-                    }
+                    title="Choose model"
                 >
-                    {!selectedAvailable && (
-                        <AlertCircle className="h-3 w-3 shrink-0 text-red-500" />
-                    )}
                     <span className="max-w-[140px] truncate">{selectedLabel}</span>
                     <ChevronDown
                         className={`h-3 w-3 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
@@ -121,9 +145,6 @@ export function ModelToggle({
                                 {group}
                             </DropdownMenuLabel>
                             {groupItems.map((m) => {
-                                const available = apiKeys
-                                    ? isModelAvailable(m.id, apiKeys)
-                                    : true;
                                 const isFav = favoritesSet.has(m.id);
                                 return (
                                     <DropdownMenuItem
@@ -147,24 +168,14 @@ export function ModelToggle({
                                                 />
                                             </button>
                                         )}
-                                        <span
-                                            className={`flex-1 truncate ${available ? "" : "text-gray-400"}`}
-                                        >
-                                            {m.label}
-                                        </span>
+                                        <span className="flex-1 truncate">{m.label}</span>
                                         {showZdr && m.zdr && (
                                             <Shield
                                                 className="h-3 w-3 text-green-600 ml-1 shrink-0"
                                                 aria-label="Zero data retention"
                                             />
                                         )}
-                                        {!available && (
-                                            <AlertCircle
-                                                className="h-3.5 w-3.5 text-red-500 ml-1"
-                                                aria-label="API key missing"
-                                            />
-                                        )}
-                                        {m.id === value && available && (
+                                        {m.id === value && (
                                             <Check className="h-3.5 w-3.5 text-gray-600 ml-1" />
                                         )}
                                     </DropdownMenuItem>
@@ -173,6 +184,15 @@ export function ModelToggle({
                         </div>
                     );
                 })}
+                {items.length === 0 && (
+                    <div className="px-3 py-4 text-xs text-gray-400 text-center">
+                        No models enabled.{" "}
+                        <a href="/account/models" className="underline">
+                            Enable models
+                        </a>{" "}
+                        in Settings.
+                    </div>
+                )}
             </DropdownMenuContent>
         </DropdownMenu>
     );

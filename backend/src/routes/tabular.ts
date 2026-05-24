@@ -18,6 +18,7 @@ import {
 } from "../lib/llm";
 import { providerLabel } from "../lib/llm/providers";
 import { getUserModelSettings } from "../lib/userSettings";
+import { resolveReviewModel } from "../lib/llm/routing";
 import {
     checkProjectAccess,
     ensureReviewAccess,
@@ -200,13 +201,14 @@ tabularRouter.get("/", requireAuth, async (req, res) => {
 tabularRouter.post("/", requireAuth, async (req, res) => {
     const userId = res.locals.userId as string;
     const userEmail = res.locals.userEmail as string | undefined;
-    const { title, document_ids, columns_config, workflow_id, project_id } =
+    const { title, document_ids, columns_config, workflow_id, project_id, model } =
         req.body as {
             title?: string;
             document_ids: string[];
             columns_config: { index: number; name: string; prompt: string }[];
             workflow_id?: string;
             project_id?: string;
+            model?: string;
         };
 
     const db = createServerSupabase();
@@ -237,6 +239,7 @@ tabularRouter.post("/", requireAuth, async (req, res) => {
             document_ids: allowedDocumentIds,
             project_id: project_id ?? null,
             workflow_id: workflow_id ?? null,
+            model: model ?? null,
         })
         .select("*")
         .single();
@@ -745,9 +748,11 @@ tabularRouter.post(
             return void res.status(404).json({ detail: "Document not found" });
         const docActive = await loadActiveVersion(document_id, db);
 
-        const { tabular_model, api_keys } = await getUserModelSettings(
-            userId,
-            db,
+        const { api_keys, ...mSettings } = await getUserModelSettings(userId, db);
+        const tabular_model = resolveReviewModel(
+            review.model,
+            { high_model: null, medium_model: mSettings.tabular_model, low_model: null },
+            api_keys,
         );
         const missingKey = missingModelApiKey(tabular_model, api_keys);
         if (missingKey) {
@@ -873,7 +878,16 @@ tabularRouter.post("/:reviewId/generate", requireAuth, async (req, res) => {
         docs = data ?? [];
     }
 
-    const { tabular_model, api_keys } = await getUserModelSettings(userId, db);
+    const { api_keys, ...modelSettings } = await getUserModelSettings(userId, db);
+    const tabular_model = resolveReviewModel(
+        review.model,
+        {
+            high_model: null,
+            medium_model: modelSettings.tabular_model,
+            low_model: null,
+        },
+        api_keys,
+    );
     const missingKey = missingModelApiKey(tabular_model, api_keys);
     if (missingKey) {
         return void res.status(422).json({
@@ -1272,7 +1286,13 @@ tabularRouter.post("/:reviewId/chat", requireAuth, async (req, res) => {
         ),
     };
 
-    const { tabular_model, api_keys } = await getUserModelSettings(userId, db);
+    const { api_keys: chatApiKeys, ...chatModelSettings } = await getUserModelSettings(userId, db);
+    const tabular_model = resolveReviewModel(
+        review.model,
+        { high_model: null, medium_model: chatModelSettings.tabular_model, low_model: null },
+        chatApiKeys,
+    );
+    const api_keys = chatApiKeys;
     const missingKey = missingModelApiKey(tabular_model, api_keys);
     if (missingKey) {
         return void res.status(422).json({
