@@ -367,17 +367,30 @@ function CatalogTable({
         <div className="rounded-xl border border-gray-100 overflow-hidden">
             <table className="w-full text-sm table-fixed">
                 <colgroup>
+                    {/* enabled dot */}
+                    <col style={{ width: "32px" }} />
+                    {/* star */}
+                    <col style={{ width: "28px" }} />
+                    {/* name + slug */}
                     <col className="w-auto" />
-                    <col style={{ width: "62px" }} />
-                    <col style={{ width: "72px" }} />
-                    <col style={{ width: "80px" }} />
-                    <col style={{ width: "40px" }} />
-                    <col style={{ width: "36px" }} />
+                    {/* capabilities */}
+                    <col style={{ width: "120px" }} />
+                    {/* CTX */}
+                    <col style={{ width: "58px" }} />
+                    {/* IN/M */}
+                    <col style={{ width: "68px" }} />
+                    {/* OUT/M */}
+                    <col style={{ width: "76px" }} />
                 </colgroup>
                 <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
-                        <th className="text-left px-4 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide">
+                        <th className="px-2 py-2"></th>
+                        <th className="px-2 py-2"></th>
+                        <th className="text-left px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide">
                             Model
+                        </th>
+                        <th className="px-2 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide text-center">
+                            Capabilities
                         </th>
                         <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide">
                             CTX
@@ -388,8 +401,6 @@ function CatalogTable({
                         <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide">
                             OUT/M
                         </th>
-                        <th className="px-2 py-2"></th>
-                        <th className="px-2 py-2"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -404,32 +415,59 @@ function CatalogTable({
                             <React.Fragment key={qid}>
                             {showGroupHeader && (
                                 <tr className="border-b border-gray-100 bg-gray-50/80">
-                                    <td colSpan={6} className="px-4 py-1.5">
+                                    <td colSpan={7} className="px-4 py-1.5">
                                         <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
                                             {m.vendor_group}
                                         </span>
                                     </td>
                                 </tr>
                             )}
-                            <tr
-                                className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors"
-                            >
-                                {/* Name + slug + cap icons — all one line, slug truncates */}
-                                <td className="px-4 py-2 overflow-hidden">
-                                    <div className="flex items-center gap-2 min-w-0">
+                            <tr className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
+                                {/* Enabled toggle dot */}
+                                <td className="px-2 py-2 text-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => onToggleEnabled(qid)}
+                                        aria-label={enabled ? "Disable model" : "Enable model"}
+                                        className="flex items-center justify-center w-full"
+                                    >
+                                        <span className={`inline-block w-3 h-3 rounded-full border-2 transition-colors ${
+                                            enabled
+                                                ? "bg-emerald-500 border-emerald-500"
+                                                : "bg-transparent border-gray-300 hover:border-gray-400"
+                                        }`} />
+                                    </button>
+                                </td>
+                                {/* Star */}
+                                <td className="px-2 py-2 text-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => onToggleFavorite(qid)}
+                                        className="transition-colors"
+                                        aria-label={favorite ? "Unstar model" : "Star model"}
+                                    >
+                                        <Star className={`h-3.5 w-3.5 ${favorite ? "fill-amber-400 text-amber-400" : "text-gray-200 hover:text-gray-300"}`} />
+                                    </button>
+                                </td>
+                                {/* Name + slug */}
+                                <td className="px-3 py-2 overflow-hidden">
+                                    <div className="flex items-baseline gap-2 min-w-0">
                                         <span className={`font-medium text-sm whitespace-nowrap ${enabled ? "text-gray-900" : "text-gray-400"}`}>
                                             {m.display_name}
                                         </span>
                                         <span className="text-[11px] text-gray-300 font-mono truncate min-w-0">
                                             {m.id}
                                         </span>
-                                        <span className="flex items-center gap-0.5 shrink-0">
-                                            {m.supports_tools && <CapIcon type="tools" />}
-                                            {m.supports_images && <CapIcon type="images" />}
-                                            {m.supports_pdf && <CapIcon type="pdf" />}
-                                            {m.supports_reasoning && <CapIcon type="reasoning" />}
-                                            {m.zdr && <CapIcon type="zdr" />}
-                                        </span>
+                                    </div>
+                                </td>
+                                {/* Capability icons — colored */}
+                                <td className="px-2 py-2">
+                                    <div className="flex items-center justify-center gap-1">
+                                        <CapIcon type="tools" active={!!m.supports_tools} />
+                                        <CapIcon type="images" active={!!m.supports_images} />
+                                        <CapIcon type="pdf" active={!!m.supports_pdf} />
+                                        <CapIcon type="reasoning" active={!!m.supports_reasoning} />
+                                        <CapIcon type="zdr" active={!!m.zdr} />
                                     </div>
                                 </td>
                                 <td className="px-3 py-2 text-right text-gray-400 text-xs font-mono">
@@ -445,32 +483,6 @@ function CatalogTable({
                                         {m.output_price_per_m != null ? `$${m.output_price_per_m.toFixed(2)}` : "—"}
                                     </span>
                                 </td>
-                                <td className="px-2 py-2 text-center">
-                                    <button
-                                        type="button"
-                                        onClick={() => onToggleEnabled(qid)}
-                                        className="transition-colors"
-                                        aria-label={enabled ? "Disable model" : "Enable model"}
-                                    >
-                                        {enabled ? (
-                                            <ToggleRight className="h-5 w-5 text-gray-900" />
-                                        ) : (
-                                            <ToggleLeft className="h-5 w-5 text-gray-300 hover:text-gray-400" />
-                                        )}
-                                    </button>
-                                </td>
-                                <td className="px-2 py-2 text-center">
-                                    <button
-                                        type="button"
-                                        onClick={() => onToggleFavorite(qid)}
-                                        className="transition-colors"
-                                        aria-label={favorite ? "Unstar model" : "Star model"}
-                                    >
-                                        <Star
-                                            className={`h-3.5 w-3.5 ${favorite ? "fill-amber-400 text-amber-400" : "text-gray-200 hover:text-gray-300"}`}
-                                        />
-                                    </button>
-                                </td>
                             </tr>
                             </React.Fragment>
                         );
@@ -481,39 +493,59 @@ function CatalogTable({
     );
 }
 
-// Small SVG icons for capabilities — title gives tooltip on hover
-function CapIcon({ type }: { type: "tools" | "images" | "pdf" | "reasoning" | "zdr" }) {
-    const base = "w-3.5 h-3.5 text-gray-400 shrink-0";
-    if (type === "tools") return (
-        <svg title="Tool use" className={base} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M3 13L10 6M13 3a2 2 0 01-3 3L6 10l-3 1 1-3 4-4a2 2 0 013-3z" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-    );
-    if (type === "images") return (
-        <svg title="Vision / images" className={base} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/>
-            <circle cx="5.5" cy="6" r="1.25"/>
-            <path d="M1.5 11l3.5-3.5 2.5 2.5 2-2 4 4" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-    );
-    if (type === "pdf") return (
-        <svg title="PDF support" className={base} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M9 1.5H4a1 1 0 00-1 1v11a1 1 0 001 1h8a1 1 0 001-1V6L9 1.5z" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M9 1.5V6h4.5" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M5 9.5h6M5 11.5h4" strokeLinecap="round"/>
-        </svg>
-    );
-    if (type === "reasoning") return (
-        <svg title="Reasoning / thinking" className={base} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M8 1.5a4.5 4.5 0 014.5 4.5c0 1.8-1 3.3-2.5 4.1V11.5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1.4A4.5 4.5 0 018 1.5z" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M6.5 14.5h3" strokeLinecap="round"/>
-        </svg>
-    );
-    // zdr
+// Capability icons — colored when active, gray ghost when inactive
+function CapIcon({ type, active }: { type: "tools" | "images" | "pdf" | "reasoning" | "zdr"; active: boolean }) {
+    const size = "w-4 h-4 shrink-0";
+
+    if (type === "tools") {
+        const cls = active ? `${size} text-blue-500` : `${size} text-gray-200`;
+        return (
+            <svg title="Tool use" className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M3 13L10 6M13 3a2 2 0 01-3 3L6 10l-3 1 1-3 4-4a2 2 0 013-3z" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+        );
+    }
+    if (type === "images") {
+        const cls = active ? `${size} text-violet-500` : `${size} text-gray-200`;
+        return (
+            <svg title="Vision / images" className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/>
+                <circle cx="5.5" cy="6" r="1.25"/>
+                <path d="M1.5 11l3.5-3.5 2.5 2.5 2-2 4 4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+        );
+    }
+    if (type === "pdf") {
+        const cls = active ? `${size} text-orange-500` : `${size} text-gray-200`;
+        return (
+            <svg title="PDF support" className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M9 1.5H4a1 1 0 00-1 1v11a1 1 0 001 1h8a1 1 0 001-1V6L9 1.5z" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M9 1.5V6h4.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M5 9.5h6M5 11.5h4" strokeLinecap="round"/>
+            </svg>
+        );
+    }
+    if (type === "reasoning") {
+        const cls = active ? `${size} text-amber-500` : `${size} text-gray-200`;
+        return (
+            <svg title="Reasoning / thinking" className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M8 1.5a4.5 4.5 0 014.5 4.5c0 1.8-1 3.3-2.5 4.1V11.5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1.4A4.5 4.5 0 018 1.5z" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M6.5 14.5h3" strokeLinecap="round"/>
+            </svg>
+        );
+    }
+    // ZDR shield — green fill when active, ghost when not
+    if (active) {
+        return (
+            <svg title="Zero Data Retention" className={`${size} text-emerald-500`} viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 1L2 3.5v5C2 11.8 4.7 14.5 8 15.5c3.3-1 6-3.7 6-7V3.5L8 1z"/>
+                <path d="M5.5 8l1.8 1.8L10.5 6.5" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+        );
+    }
     return (
-        <svg title="Zero Data Retention" className={base} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M8 1.5l5.5 3v5L8 13 2.5 9.5v-5L8 1.5z" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M8 5v3.5M8 10v.5" strokeLinecap="round"/>
+        <svg title="Zero Data Retention (not available)" className={`${size} text-gray-200`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M8 1L2 3.5v5C2 11.8 4.7 14.5 8 15.5c3.3-1 6-3.7 6-7V3.5L8 1z" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
     );
 }
