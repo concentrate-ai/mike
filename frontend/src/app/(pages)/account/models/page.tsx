@@ -5,10 +5,6 @@ import {
     Check,
     ChevronDown,
     Star,
-    ToggleLeft,
-    ToggleRight,
-    Plus,
-    Trash2,
     Loader2,
 } from "lucide-react";
 import {
@@ -55,7 +51,7 @@ const TIERS = [
 // ---------------------------------------------------------------------------
 
 export default function ModelsPage() {
-    const { profile, updateTierModel, toggleFavoriteModel, setEnabledModels, setCustomModels } =
+    const { profile, updateTierModel, toggleFavoriteModel, setEnabledModels } =
         useUserProfile();
 
     // Which provider tab is active in the catalog
@@ -68,8 +64,6 @@ export default function ModelsPage() {
     // All enabled + custom model ids
     const enabledModels = profile?.enabledModels ?? [];
     const favoriteModels = profile?.favoriteModels ?? [];
-    const customModels = (profile?.customModels ?? []) as CustomModelEntry[];
-
     // Local providers (Ollama, vLLM, Custom) — shown when server has them configured
     const [localProviders, setLocalProviders] = useState<{ id: string; label: string }[]>([]);
     useEffect(() => {
@@ -86,7 +80,6 @@ export default function ModelsPage() {
 
     // Load models for the active tab
     useEffect(() => {
-        if (activeTab === "custom") return;
         setCatalogLoading(true);
         getProviderModels(activeTab)
             .then(setCatalogModels)
@@ -111,14 +104,7 @@ export default function ModelsPage() {
             const matched = flat.filter((m) =>
                 ids.has(`${m.provider}:${m.id}`),
             );
-            // Also include custom models
-            const customAsModels: CatalogModel[] = customModels.map((cm) => ({
-                provider: cm.provider,
-                id: cm.id,
-                display_name: cm.display_name,
-                is_custom: true,
-            }));
-            setAllEnabledDetails([...matched, ...customAsModels]);
+            setAllEnabledDetails(matched);
         });
     }, [enabledModels, profile?.apiKeys]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -199,27 +185,9 @@ export default function ModelsPage() {
                             {p.label}
                         </button>
                     ))}
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab("custom")}
-                        className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                            activeTab === "custom"
-                                ? "bg-gray-900 text-white"
-                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                        }`}
-                    >
-                        + Custom
-                    </button>
                 </div>
 
-                {activeTab === "custom" ? (
-                    <CustomModelsTab
-                        customModels={customModels}
-                        enabledModels={enabledModels}
-                        onSave={setCustomModels}
-                        onToggleEnabled={handleToggleEnabled}
-                    />
-                ) : catalogLoading ? (
+                {catalogLoading ? (
                     <div className="flex items-center gap-2 py-8 text-gray-400">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span className="text-sm">Loading…</span>
@@ -586,233 +554,3 @@ function formatK(n: number): string {
     return String(n);
 }
 
-// ---------------------------------------------------------------------------
-// Custom models tab
-// ---------------------------------------------------------------------------
-
-type CustomModelEntry = {
-    provider: string;
-    id: string;
-    display_name: string;
-    input_price_per_m?: number | null;
-    output_price_per_m?: number | null;
-};
-
-function CustomModelsTab({
-    customModels,
-    enabledModels,
-    onSave,
-    onToggleEnabled,
-}: {
-    customModels: CustomModelEntry[];
-    enabledModels: string[];
-    onSave: (models: unknown[]) => Promise<boolean>;
-    onToggleEnabled: (qualifiedId: string) => Promise<void>;
-}) {
-    const [form, setForm] = useState({
-        provider: "generic",
-        id: "",
-        display_name: "",
-        input_price_per_m: "",
-        output_price_per_m: "",
-    });
-    const [adding, setAdding] = useState(false);
-
-    const handleAdd = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!form.id.trim() || !form.display_name.trim()) return;
-        const entry: CustomModelEntry = {
-            provider: form.provider,
-            id: form.id.trim(),
-            display_name: form.display_name.trim(),
-            input_price_per_m: form.input_price_per_m
-                ? parseFloat(form.input_price_per_m)
-                : null,
-            output_price_per_m: form.output_price_per_m
-                ? parseFloat(form.output_price_per_m)
-                : null,
-        };
-        setAdding(true);
-        const ok = await onSave([...customModels, entry]);
-        setAdding(false);
-        if (ok) {
-            setForm({ provider: "generic", id: "", display_name: "", input_price_per_m: "", output_price_per_m: "" });
-        }
-    };
-
-    const handleRemove = async (index: number) => {
-        const next = customModels.filter((_, i) => i !== index);
-        await onSave(next);
-    };
-
-    return (
-        <div className="space-y-4">
-            {customModels.length > 0 && (
-                <div className="rounded-xl border border-gray-100 overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-gray-100 bg-gray-50">
-                                <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">
-                                    Model
-                                </th>
-                                <th className="text-center px-4 py-2.5 font-medium text-gray-500 text-xs">
-                                    Enabled
-                                </th>
-                                <th className="px-4 py-2.5" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {customModels.map((m, i) => {
-                                const qid = `${m.provider}:${m.id}`;
-                                const enabled = enabledModels.includes(qid);
-                                return (
-                                    <tr
-                                        key={i}
-                                        className="border-b border-gray-50 last:border-0 hover:bg-gray-50"
-                                    >
-                                        <td className="px-4 py-2.5">
-                                            <div className="font-medium text-gray-900">
-                                                {m.display_name}
-                                            </div>
-                                            <div className="text-xs text-gray-400 font-mono mt-0.5">
-                                                {m.provider}:{m.id}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-2.5 text-center">
-                                            <button
-                                                type="button"
-                                                onClick={() => onToggleEnabled(qid)}
-                                            >
-                                                {enabled ? (
-                                                    <ToggleRight className="h-5 w-5 text-gray-900" />
-                                                ) : (
-                                                    <ToggleLeft className="h-5 w-5 text-gray-400" />
-                                                )}
-                                            </button>
-                                        </td>
-                                        <td className="px-4 py-2.5 text-right">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemove(i)}
-                                                className="text-gray-400 hover:text-red-500 transition-colors"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-
-            <form
-                onSubmit={handleAdd}
-                className="rounded-xl border border-dashed border-gray-200 p-4 space-y-3"
-            >
-                <p className="text-xs font-medium text-gray-600">Add custom model slug</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                        <label className="text-xs text-gray-500 block mb-1">
-                            Provider
-                        </label>
-                        <select
-                            value={form.provider}
-                            onChange={(e) =>
-                                setForm((f) => ({ ...f, provider: e.target.value }))
-                            }
-                            className="w-full h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
-                        >
-                            <option value="generic">Custom Endpoint</option>
-                            <option value="concentrate">Concentrate</option>
-                            <option value="claude">Anthropic</option>
-                            <option value="gemini">Google</option>
-                            <option value="openai">OpenAI</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-xs text-gray-500 block mb-1">
-                            Model ID (slug) *
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            value={form.id}
-                            onChange={(e) =>
-                                setForm((f) => ({ ...f, id: e.target.value }))
-                            }
-                            placeholder="e.g. my-model-v1"
-                            className="w-full h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs text-gray-500 block mb-1">
-                            Display name *
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            value={form.display_name}
-                            onChange={(e) =>
-                                setForm((f) => ({ ...f, display_name: e.target.value }))
-                            }
-                            placeholder="My Model v1"
-                            className="w-full h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
-                        />
-                    </div>
-                    <div className="sm:col-span-2 flex gap-3">
-                        <div className="flex-1">
-                            <label className="text-xs text-gray-500 block mb-1">
-                                Input $/M tokens (optional)
-                            </label>
-                            <input
-                                type="number"
-                                step="any"
-                                value={form.input_price_per_m}
-                                onChange={(e) =>
-                                    setForm((f) => ({
-                                        ...f,
-                                        input_price_per_m: e.target.value,
-                                    }))
-                                }
-                                placeholder="e.g. 0.50"
-                                className="w-full h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
-                            />
-                        </div>
-                        <div className="flex-1">
-                            <label className="text-xs text-gray-500 block mb-1">
-                                Output $/M tokens (optional)
-                            </label>
-                            <input
-                                type="number"
-                                step="any"
-                                value={form.output_price_per_m}
-                                onChange={(e) =>
-                                    setForm((f) => ({
-                                        ...f,
-                                        output_price_per_m: e.target.value,
-                                    }))
-                                }
-                                placeholder="e.g. 1.50"
-                                className="w-full h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
-                            />
-                        </div>
-                    </div>
-                </div>
-                <button
-                    type="submit"
-                    disabled={adding || !form.id.trim() || !form.display_name.trim()}
-                    className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700 disabled:opacity-40 transition-colors"
-                >
-                    {adding ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                        <Plus className="h-3.5 w-3.5" />
-                    )}
-                    Add model
-                </button>
-            </form>
-        </div>
-    );
-}
