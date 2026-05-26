@@ -65,9 +65,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
         id: string;
         title: string;
     } | null>(null);
-    const { profile, toggleFavoriteModel } = useUserProfile();
+    const { profile, toggleFavoriteModel, allEnabledDetails } = useUserProfile();
     const apiKeys = profile?.apiKeys;
-    const { models, dynamicIds } = useModels(profile?.enabledModels, profile?.favoriteModels);
+    const { models, dynamicIds } = useModels(profile?.enabledModels, profile?.favoriteModels, allEnabledDetails);
     const [model, setModel] = useSelectedModel(dynamicIds);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [docSelectorOpen, setDocSelectorOpen] = useState(false);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { ChevronDown, Check, AlertCircle, Star, Shield } from "lucide-react";
 import {
     DropdownMenu,
@@ -11,6 +11,8 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { ApiKeyState } from "@/app/lib/mikeApi";
+import type { CatalogModel } from "@/app/lib/providerModels";
+import { getProviderModels, CATALOG_PROVIDERS } from "@/app/lib/providerModels";
 import type { ModelOption } from "@/app/lib/models";
 import { MODELS } from "@/app/lib/models";
 
@@ -53,30 +55,65 @@ function qualifiedIdToOption(qid: string): ModelOption | null {
 export function useModels(
     enabledModels?: string[],
     favoriteModels?: string[],
+    catalogDetails?: CatalogModel[],
 ): {
     models: ModelOption[];
     dynamicIds: Set<string>;
 } {
+    // Pull catalog data from the client-side cache (populated when /account/models
+    // is visited, or proactively below). This state updates when the cache fills.
+    const [cachedDetails, setCachedDetails] = useState<CatalogModel[]>(catalogDetails ?? []);
+
+    useEffect(() => {
+        if (catalogDetails && catalogDetails.length > 0) {
+            setCachedDetails(catalogDetails);
+            return;
+        }
+        // Proactively fetch all provider catalogs to populate ZDR etc.
+        Promise.all(CATALOG_PROVIDERS.map((p) => getProviderModels(p.id)))
+            .then((results) => setCachedDetails(results.flat()))
+            .catch(() => {});
+    }, [catalogDetails]);
+
     return useMemo(() => {
         const source = enabledModels && enabledModels.length > 0 ? enabledModels : null;
 
         if (!source) {
-            // Fallback: hardcoded list with bare ids (legacy behaviour)
             return {
                 models: MODELS,
                 dynamicIds: new Set(MODELS.map((m) => m.id)),
             };
         }
 
+        // Build a slug→catalog lookup for ZDR and display_name enrichment
+        const catalogBySlug = new Map<string, CatalogModel>();
+        for (const m of cachedDetails) {
+            catalogBySlug.set(m.id, m);
+            catalogBySlug.set(`${m.provider}:${m.id}`, m);
+        }
+
         const models = source
-            .map(qualifiedIdToOption)
+            .map((qid) => {
+                const opt = qualifiedIdToOption(qid);
+                if (!opt) return null;
+                const slug = qid.includes(":") ? qid.split(":")[1] : qid;
+                const cat = catalogBySlug.get(qid) ?? catalogBySlug.get(slug ?? "");
+                if (cat) {
+                    return {
+                        ...opt,
+                        label: cat.display_name || opt.label,
+                        zdr: cat.zdr ?? opt.zdr,
+                    };
+                }
+                return opt;
+            })
             .filter((m): m is ModelOption => m !== null);
 
         return {
             models,
             dynamicIds: new Set(models.map((m) => m.id)),
         };
-    }, [enabledModels]);
+    }, [enabledModels, cachedDetails]);
 }
 
 interface Props {
@@ -141,7 +178,8 @@ export function ModelToggle({
                     return (
                         <div key={group}>
                             {gi > 0 && <DropdownMenuSeparator />}
-                            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-gray-400">
+                            <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 flex items-center gap-1.5 py-1.5">
+                                {group === "Favorites" && <Star className="h-3 w-3 fill-amber-400 text-amber-400" />}
                                 {group}
                             </DropdownMenuLabel>
                             {groupItems.map((m) => {
@@ -170,13 +208,15 @@ export function ModelToggle({
                                         )}
                                         <span className="flex-1 truncate">{m.label}</span>
                                         {showZdr && m.zdr && (
-                                            <Shield
-                                                className="h-3 w-3 text-green-600 ml-1 shrink-0"
-                                                aria-label="Zero data retention"
-                                            />
+                                            <span title="Zero Data Retention — your data is not used for training" className="inline-flex ml-1 shrink-0">
+                                                <Shield
+                                                    className="h-3.5 w-3.5 text-emerald-600 fill-emerald-50"
+                                                    aria-label="Zero Data Retention"
+                                                />
+                                            </span>
                                         )}
                                         {m.id === value && (
-                                            <Check className="h-3.5 w-3.5 text-gray-600 ml-1" />
+                                            <Check className="h-3.5 w-3.5 text-gray-500 ml-1" aria-label="Currently selected" />
                                         )}
                                     </DropdownMenuItem>
                                 );

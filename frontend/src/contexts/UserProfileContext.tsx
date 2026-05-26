@@ -21,6 +21,8 @@ import {
     saveCustomModels,
     updateUserProfile,
 } from "@/app/lib/mikeApi";
+import { getProviderModels, type CatalogModel } from "@/app/lib/providerModels";
+import { CATALOG_PROVIDERS } from "@/app/lib/providerModels";
 
 interface UserProfile {
     displayName: string | null;
@@ -61,6 +63,7 @@ interface UserProfileContextType {
     setCustomModels: (models: unknown[]) => Promise<boolean>;
     reloadProfile: () => Promise<void>;
     incrementMessageCredits: () => Promise<boolean>;
+    allEnabledDetails: CatalogModel[];
 }
 
 const UserProfileContext = createContext<UserProfileContextType | undefined>(
@@ -100,6 +103,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     const { user, isAuthenticated } = useAuth();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [allEnabledDetails, setAllEnabledDetails] = useState<CatalogModel[]>([]);
 
     const loadProfile = useCallback(async () => {
         try {
@@ -138,6 +142,21 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
             setLoading(false);
         }
     }, [isAuthenticated, user, loadProfile]);
+
+    // Fetch catalog details (zdr, display_name, etc.) for all enabled models
+    useEffect(() => {
+        const ids = profile?.enabledModels;
+        if (!ids || ids.length === 0) { setAllEnabledDetails([]); return; }
+        const idSet = new Set(ids);
+        Promise.all(
+            CATALOG_PROVIDERS.map((p) => getProviderModels(p.id)),
+        ).then((results) => {
+            const flat = results.flat();
+            setAllEnabledDetails(
+                flat.filter((m) => idSet.has(`${m.provider}:${m.id}`)),
+            );
+        });
+    }, [profile?.enabledModels]);
 
     const updateDisplayName = useCallback(
         async (displayName: string): Promise<boolean> => {
@@ -322,6 +341,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
                 setCustomModels,
                 reloadProfile,
                 incrementMessageCredits,
+                allEnabledDetails,
             }}
         >
             {children}

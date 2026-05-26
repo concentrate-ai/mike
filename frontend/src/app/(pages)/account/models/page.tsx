@@ -384,21 +384,25 @@ function CatalogTable({
                 </colgroup>
                 <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
-                        <th className="px-2 py-2"></th>
-                        <th className="px-2 py-2"></th>
+                        <th className="px-2 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide text-center" title="Enable model for use in the assistant and tier dropdowns">
+                            On
+                        </th>
+                        <th className="px-2 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide text-center" title="Star as a favorite — appears at the top of the model picker">
+                            Fav
+                        </th>
                         <th className="text-left px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide">
                             Model
                         </th>
                         <th className="px-2 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide text-center">
                             Capabilities
                         </th>
-                        <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide">
+                        <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide" title="Context window size">
                             CTX
                         </th>
-                        <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide">
+                        <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide" title="Input price per million tokens (USD)">
                             IN/M
                         </th>
-                        <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide">
+                        <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide" title="Output price per million tokens (USD)">
                             OUT/M
                         </th>
                     </tr>
@@ -428,12 +432,13 @@ function CatalogTable({
                                     <button
                                         type="button"
                                         onClick={() => onToggleEnabled(qid)}
-                                        aria-label={enabled ? "Disable model" : "Enable model"}
+                                        aria-label={enabled ? `Disable ${m.display_name}` : `Enable ${m.display_name}`}
+                                        title={enabled ? "Enabled — click to disable" : "Disabled — click to enable"}
                                         className="flex items-center justify-center w-full"
                                     >
                                         <span className={`inline-block w-3 h-3 rounded-full border-2 transition-colors ${
                                             enabled
-                                                ? "bg-emerald-500 border-emerald-500"
+                                                ? "bg-gray-400 border-gray-400"
                                                 : "bg-transparent border-gray-300 hover:border-gray-400"
                                         }`} />
                                     </button>
@@ -444,9 +449,10 @@ function CatalogTable({
                                         type="button"
                                         onClick={() => onToggleFavorite(qid)}
                                         className="transition-colors"
-                                        aria-label={favorite ? "Unstar model" : "Star model"}
+                                        aria-label={favorite ? `Remove ${m.display_name} from favorites` : `Add ${m.display_name} to favorites`}
+                                        title={favorite ? "Favorited — appears at top of model picker" : "Add to favorites"}
                                     >
-                                        <Star className={`h-3.5 w-3.5 ${favorite ? "fill-amber-400 text-amber-400" : "text-gray-200 hover:text-gray-300"}`} />
+                                        <Star className={`h-3.5 w-3.5 ${favorite ? "fill-amber-400/70 text-amber-400/70" : "text-gray-200 hover:text-gray-300"}`} />
                                     </button>
                                 </td>
                                 {/* Name + slug */}
@@ -455,7 +461,7 @@ function CatalogTable({
                                         <span className={`font-medium text-sm whitespace-nowrap ${enabled ? "text-gray-900" : "text-gray-400"}`}>
                                             {m.display_name}
                                         </span>
-                                        <span className="text-[11px] text-gray-300 font-mono truncate min-w-0">
+                                        <span className="text-[11px] text-gray-300 font-mono truncate min-w-0" title={m.id}>
                                             {m.id}
                                         </span>
                                     </div>
@@ -493,60 +499,77 @@ function CatalogTable({
     );
 }
 
-// Capability icons — colored when active, gray ghost when inactive
+// Capability icons — colored when active, gray ghost when inactive.
+// Wrapped in <span title> for reliable cross-browser tooltip.
 function CapIcon({ type, active }: { type: "tools" | "images" | "pdf" | "reasoning" | "zdr"; active: boolean }) {
     const size = "w-4 h-4 shrink-0";
 
+    const LABELS: Record<typeof type, { active: string; inactive: string }> = {
+        tools:     { active: "Tool use supported",           inactive: "No tool use" },
+        images:    { active: "Vision / images supported",    inactive: "No image input" },
+        pdf:       { active: "PDF input supported",          inactive: "No PDF input" },
+        reasoning: { active: "Extended reasoning supported", inactive: "No extended reasoning" },
+        zdr:       { active: "Zero Data Retention (ZDR)",    inactive: "No ZDR" },
+    };
+
+    const label = active ? LABELS[type].active : LABELS[type].inactive;
+
+    let svg: React.ReactNode;
+
     if (type === "tools") {
-        const cls = active ? `${size} text-blue-500` : `${size} text-gray-200`;
-        return (
-            <svg title="Tool use" className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+        const cls = active ? `${size} text-blue-400/80` : `${size} text-gray-200`;
+        svg = (
+            <svg role="img" aria-label={label} className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M3 13L10 6M13 3a2 2 0 01-3 3L6 10l-3 1 1-3 4-4a2 2 0 013-3z" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
         );
-    }
-    if (type === "images") {
-        const cls = active ? `${size} text-violet-500` : `${size} text-gray-200`;
-        return (
-            <svg title="Vision / images" className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+    } else if (type === "images") {
+        const cls = active ? `${size} text-violet-400/80` : `${size} text-gray-200`;
+        svg = (
+            <svg role="img" aria-label={label} className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/>
                 <circle cx="5.5" cy="6" r="1.25"/>
                 <path d="M1.5 11l3.5-3.5 2.5 2.5 2-2 4 4" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
         );
-    }
-    if (type === "pdf") {
-        const cls = active ? `${size} text-orange-500` : `${size} text-gray-200`;
-        return (
-            <svg title="PDF support" className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+    } else if (type === "pdf") {
+        const cls = active ? `${size} text-orange-400/80` : `${size} text-gray-200`;
+        svg = (
+            <svg role="img" aria-label={label} className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M9 1.5H4a1 1 0 00-1 1v11a1 1 0 001 1h8a1 1 0 001-1V6L9 1.5z" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M9 1.5V6h4.5" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M5 9.5h6M5 11.5h4" strokeLinecap="round"/>
             </svg>
         );
-    }
-    if (type === "reasoning") {
-        const cls = active ? `${size} text-amber-500` : `${size} text-gray-200`;
-        return (
-            <svg title="Reasoning / thinking" className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+    } else if (type === "reasoning") {
+        const cls = active ? `${size} text-amber-400/80` : `${size} text-gray-200`;
+        svg = (
+            <svg role="img" aria-label={label} className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M8 1.5a4.5 4.5 0 014.5 4.5c0 1.8-1 3.3-2.5 4.1V11.5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1.4A4.5 4.5 0 018 1.5z" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M6.5 14.5h3" strokeLinecap="round"/>
             </svg>
         );
-    }
-    // ZDR shield — green fill when active, ghost when not
-    if (active) {
-        return (
-            <svg title="Zero Data Retention" className={`${size} text-emerald-500`} viewBox="0 0 16 16" fill="currentColor">
+    } else if (active) {
+        // ZDR active — filled green shield with checkmark
+        svg = (
+            <svg role="img" aria-label={label} className={`${size} text-emerald-500/75`} viewBox="0 0 16 16" fill="currentColor">
                 <path d="M8 1L2 3.5v5C2 11.8 4.7 14.5 8 15.5c3.3-1 6-3.7 6-7V3.5L8 1z"/>
                 <path d="M5.5 8l1.8 1.8L10.5 6.5" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
         );
+    } else {
+        // ZDR inactive — ghost outline
+        svg = (
+            <svg role="img" aria-label={label} className={`${size} text-gray-200`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M8 1L2 3.5v5C2 11.8 4.7 14.5 8 15.5c3.3-1 6-3.7 6-7V3.5L8 1z" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+        );
     }
+
     return (
-        <svg title="Zero Data Retention (not available)" className={`${size} text-gray-200`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M8 1L2 3.5v5C2 11.8 4.7 14.5 8 15.5c3.3-1 6-3.7 6-7V3.5L8 1z" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        <span title={label} className="inline-flex items-center justify-center">
+            {svg}
+        </span>
     );
 }
 
