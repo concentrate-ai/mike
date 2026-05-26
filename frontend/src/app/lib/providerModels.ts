@@ -1,5 +1,5 @@
 import type { CatalogModel } from "./mikeApi";
-import { fetchProviderModels } from "./mikeApi";
+import { fetchProviderModels, fetchLocalProviders } from "./mikeApi";
 
 export type { CatalogModel };
 
@@ -45,7 +45,9 @@ export function providerTabLabel(providerId: string): string {
         anthropic: "Anthropic",
         gemini: "Google",
         openai: "OpenAI",
-        generic: "Custom Endpoint",
+        ollama: "Ollama",
+        vllm: "vLLM",
+        generic: "Custom",
     };
     return labels[providerId] ?? providerId;
 }
@@ -60,7 +62,20 @@ export const CATALOG_PROVIDERS: {
     { id: "anthropic", apiKeyProvider: "claude", label: "Anthropic" },
     { id: "gemini", apiKeyProvider: "gemini", label: "Google" },
     { id: "openai", apiKeyProvider: "openai", label: "OpenAI" },
-    // "generic" (Custom Endpoint) is only useful when GENERIC_BASE_URL is set in
-    // the server env. It's reachable via the + Custom tab flow; we don't show it
-    // as a permanent catalog tab since it would always be empty for most installs.
+    // Ollama, vLLM, and Custom are added dynamically from /providers/local-providers
+    // when the server has them configured.
 ];
+
+// Cache for local provider tabs (Ollama, vLLM, Custom)
+let localProvidersCache: { id: string; label: string }[] | null = null;
+
+export async function getLocalProviders(): Promise<{ id: string; label: string }[]> {
+    if (localProvidersCache !== null) return localProvidersCache;
+    try {
+        const providers = await fetchLocalProviders();
+        localProvidersCache = providers;
+        return localProvidersCache;
+    } catch {
+        return [];
+    }
+}

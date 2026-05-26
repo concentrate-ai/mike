@@ -220,6 +220,13 @@ export async function fetchProviderModels(
     return res.models;
 }
 
+export async function fetchLocalProviders(): Promise<{ id: string; label: string }[]> {
+    const res = await apiRequest<{ providers: { id: string; label: string }[] }>(
+        "/providers/local-providers",
+    );
+    return res.providers;
+}
+
 export type CatalogModel = {
     provider: string;
     id: string;

@@ -69,6 +69,8 @@ export interface OpenAIResponsesAdapterConfig {
     resolveBaseUrl: () => string;
     /** Resolve the env-fallback API key at call time. */
     resolveEnvKey: () => string | undefined;
+    /** If true, a missing key is not an error (e.g. Ollama with no auth). */
+    keyOptional?: boolean;
 }
 
 export interface OpenAIResponsesAdapter {
@@ -87,7 +89,7 @@ export function makeOpenAIResponsesAdapter(
 ): OpenAIResponsesAdapter {
     function resolveKey(override?: string | null): string {
         const key = override?.trim() || config.resolveEnvKey()?.trim() || "";
-        if (!key) {
+        if (!key && !config.keyOptional) {
             throw new Error(
                 `${config.label} API key is not configured. Set the environment variable or add a user key.`,
             );

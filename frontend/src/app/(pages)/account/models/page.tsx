@@ -24,6 +24,7 @@ import type { CatalogModel } from "@/app/lib/mikeApi";
 import {
     CATALOG_PROVIDERS,
     getProviderModels,
+    getLocalProviders,
     clearProviderModelsCache,
 } from "@/app/lib/providerModels";
 
@@ -69,10 +70,16 @@ export default function ModelsPage() {
     const favoriteModels = profile?.favoriteModels ?? [];
     const customModels = (profile?.customModels ?? []) as CustomModelEntry[];
 
-    // Show all provider tabs always — empty tabs show a "no key configured" message
-    // rather than hiding the tab entirely, which would make it confusing when a
-    // user adds a key and the tab suddenly appears.
-    const availableProviders = CATALOG_PROVIDERS;
+    // Local providers (Ollama, vLLM, Custom) — shown when server has them configured
+    const [localProviders, setLocalProviders] = useState<{ id: string; label: string }[]>([]);
+    useEffect(() => {
+        getLocalProviders().then(setLocalProviders);
+    }, []);
+
+    const availableProviders = [
+        ...CATALOG_PROVIDERS,
+        ...localProviders.map((p) => ({ id: p.id, apiKeyProvider: p.id, label: p.label })),
+    ];
 
     // Build flat list of all enabled models for tier dropdowns
     const [allEnabledDetails, setAllEnabledDetails] = useState<CatalogModel[]>([]);

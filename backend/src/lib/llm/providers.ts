@@ -77,14 +77,28 @@ export const PROVIDERS: readonly ProviderDef[] = [
         modelIdPrefixes: [],
     },
     {
+        id: "ollama",
+        label: "Ollama",
+        envKey: "OLLAMA_API_KEY",
+        envBaseUrl: "OLLAMA_BASE_URL",
+        defaultBaseUrl: "http://localhost:11434/v1/responses",
+        adapterType: "openai-responses",
+        modelIdPrefixes: [],
+    },
+    {
+        id: "vllm",
+        label: "vLLM",
+        envKey: "VLLM_API_KEY",
+        envBaseUrl: "VLLM_BASE_URL",
+        adapterType: "openai-responses",
+        modelIdPrefixes: [],
+    },
+    {
         id: "generic",
         label: "Custom Endpoint",
         envKey: "GENERIC_API_KEY",
         envBaseUrl: "GENERIC_BASE_URL",
         adapterType: "openai-responses",
-        // User-configured base URL + key. Covers LiteLLM, Ollama OpenAI shim,
-        // vLLM, TGI, and any other OpenAI-Responses-compatible endpoint.
-        // No modelIdPrefixes — models are identified by the user's own slugs.
         modelIdPrefixes: [],
     },
 ];

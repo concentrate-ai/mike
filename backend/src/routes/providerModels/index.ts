@@ -13,7 +13,23 @@ export { CatalogModel };
 
 export const providerModelsRouter = Router();
 
-const VALID_PROVIDERS = new Set(["concentrate", "anthropic", "gemini", "openai", "generic"]);
+const VALID_PROVIDERS = new Set(["concentrate", "anthropic", "gemini", "openai", "ollama", "vllm", "generic"]);
+
+// Local providers that are enabled purely by env var (no user API key needed).
+// Returns which ones have a base URL configured so the frontend knows which tabs to show.
+providerModelsRouter.get("/local-providers", requireAuth, (_req, res) => {
+    const providers: { id: string; label: string }[] = [];
+    for (const id of ["ollama", "vllm", "generic"] as const) {
+        try {
+            const def = providerDef(id);
+            resolveBaseUrl(def); // throws if not configured
+            providers.push({ id, label: def.label });
+        } catch {
+            // not configured
+        }
+    }
+    res.json({ providers });
+});
 
 providerModelsRouter.get(
     "/:providerId/models",
@@ -71,8 +87,8 @@ providerModelsRouter.get(
                     return;
                 }
                 models = await fetchOpenAIModels(key);
-            } else if (providerId === "generic") {
-                const def = providerDef("generic");
+            } else if (providerId === "ollama" || providerId === "vllm" || providerId === "generic") {
+                const def = providerDef(providerId as "ollama" | "vllm" | "generic");
                 let baseUrl: string;
                 try {
                     baseUrl = resolveBaseUrl(def);
@@ -80,11 +96,15 @@ providerModelsRouter.get(
                     res.json({ models: [] });
                     return;
                 }
-                const key =
-                    userKeys.generic?.trim() ||
-                    resolveEnvKey(def) ||
-                    "";
-                models = await fetchGenericModels(baseUrl, key);
+                const userKey = providerId === "ollama"
+                    ? userKeys.ollama
+                    : providerId === "vllm"
+                        ? userKeys.vllm
+                        : userKeys.generic;
+                const key = userKey?.trim() || resolveEnvKey(def) || "";
+                const rawModels = await fetchGenericModels(baseUrl, key);
+                // Tag models with their actual provider id
+                models = rawModels.map((m) => ({ ...m, provider: providerId as "ollama" | "vllm" | "generic" }));
             }
 
             res.json({ models });
