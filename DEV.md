@@ -41,7 +41,25 @@ PGPASSWORD=postgres psql -h localhost -p 54322 -U postgres -d postgres \
 ## Key env files
 
 - `backend/.env` — PORT, SUPABASE_URL, encryption secret, provider API keys
-- `frontend/.env.local` — NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SECRET_KEY, NEXT_PUBLIC_API_BASE_URL
+- `frontend/.env.local` — SUPABASE_SECRET_KEY, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY, NEXT_PUBLIC_API_BASE_URL
+
+## Cloudflare tunnel / self-hosting
+
+The frontend proxies both the backend API and Supabase through Next.js, so
+**only port 4000 needs to be exposed to the internet** — no separate tunnels for
+4001 (backend) or 54321 (Supabase).
+
+How it works:
+- `NEXT_PUBLIC_API_BASE_URL=/api/backend` — the browser calls `/api/backend/...`
+  on the same origin; `next.config.ts` rewrites this to `http://localhost:4001`
+  server-side (configurable via `BACKEND_INTERNAL_URL` in `.env.local`)
+- Supabase auth calls are proxied through `/api/supabase/...` via a Next.js
+  API route (`src/app/api/supabase/[...path]/route.ts`) which forwards to
+  `http://localhost:54321` (configurable via `SUPABASE_INTERNAL_URL` in `.env.local`)
+- `supabase.ts` derives the Supabase URL from `window.location.origin` at
+  runtime so it works with any public hostname without changing `.env.local`
+
+To add behind a Cloudflare tunnel: point the tunnel at port 4000 only.
 
 ## Backend source layout
 
