@@ -1,0 +1,284 @@
+name: mike
+
+# ---------------------------------------------------------------------------
+# Mike — full self-hosted stack
+#
+# Quick start:
+#   1. Copy .env.example to .env and fill in the required values
+#   2. docker compose up -d
+#
+# With Ollama (local LLM, requires NVIDIA GPU + nvidia-container-toolkit):
+#   docker compose --profile ollama up -d
+#
+# Services:
+#   db        — Postgres 15 (Supabase-flavoured)
+#   auth      — Supabase GoTrue (JWT auth)
+#   rest      — PostgREST (DB REST API)
+#   realtime  — Supabase Realtime (websockets, optional but needed by SDK)
+#   storage   — Supabase Storage API
+#   imgproxy  — Image transformation for Storage
+#   meta      — Supabase table metadata (used by Studio)
+#   backend   — Mike Express API (port 4001, only reachable internally)
+#   frontend  — Mike Next.js app (port 4000, the only port to expose)
+#   ollama    — Ollama LLM server (profile: ollama, GPU recommended)
+# ---------------------------------------------------------------------------
+
+x-supabase-common: &supabase-common
+  restart: unless-stopped
+  networks:
+    - mike
+
+services:
+
+  # ── Database ──────────────────────────────────────────────────────────────
+  db:
+    image: supabase/postgres:15.8.1.060
+    restart: unless-stopped
+    networks:
+      - mike
+    ports:
+      - "5432:5432"       # expose for direct psql access during dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: 5432
+      POSTGRES_PORT: 5432
+      PGPASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      PGDATABASE: postgres
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET:?required}
+      JWT_EXP: 3600
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Apply schema on first run
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+  # ── GoTrue (Auth) ──────────────────────────────────────────────────────────
+  auth:
+    <<: *supabase-common
+    image: supabase/gotrue:v2.164.0
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      GOTRUE_API_HOST: "0.0.0.0"
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:?required}   # e.g. https://yourdomain.com
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL:?required}             # e.g. https://yourdomain.com
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_EXP: 3600
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:?required}
+      GOTRUE_MAILER_AUTOCONFIRM: true   # set false + configure SMTP for email verification
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-Mike}
+      GOTRUE_MAILER_URLPATHS_INVITE: ${MAILER_URLPATHS_INVITE:-/auth/v1/verify}
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: ${MAILER_URLPATHS_CONFIRMATION:-/auth/v1/verify}
+      GOTRUE_MAILER_URLPATHS_RECOVERY: ${MAILER_URLPATHS_RECOVERY:-/auth/v1/verify}
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: ${MAILER_URLPATHS_EMAIL_CHANGE:-/auth/v1/verify}
+
+  # ── PostgREST (DB REST API) ────────────────────────────────────────────────
+  rest:
+    <<: *supabase-common
+    image: postgrest/postgrest:v12.2.0
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:?required}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET:?required}
+      PGRST_APP_SETTINGS_JWT_EXP: 3600
+
+  # ── Supabase Realtime ──────────────────────────────────────────────────────
+  realtime:
+    <<: *supabase-common
+    image: supabase/realtime:v2.34.47
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sSfL", "--head", "-o", "/dev/null", "http://localhost:4000/api/tenants/realtime-dev/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: postgres
+      DB_AFTER_CONNECT_QUERY: SET search_path TO _realtime
+      DB_ENC_KEY: ${REALTIME_ENC_KEY:?required}
+      API_JWT_SECRET: ${JWT_SECRET:?required}
+      FLY_ALLOC_ID: fly123
+      FLY_APP_NAME: realtime
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?required}
+      ERL_AFLAGS: -proto_dist inet_tcp
+      ENABLE_TAILSCALE: "false"
+      DNS_NODES: "''"
+
+  # ── Kong (API Gateway) ─────────────────────────────────────────────────────
+  # Kong is Supabase's API gateway — it routes /auth/v1 → GoTrue,
+  # /rest/v1 → PostgREST, etc. This is the single internal endpoint
+  # that the Supabase JS client talks to.
+  kong:
+    <<: *supabase-common
+    image: kong:2.8.1
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "54321:8000"   # Supabase API (accessed only internally by backend + Next.js proxy)
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      SUPABASE_ANON_KEY: ${ANON_KEY:?required}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY:?required}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-supabase}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-supabase}
+    volumes:
+      - ./docker/kong.yml:/home/kong/kong.yml:ro
+
+  # ── Mike Backend (Express API) ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - mike
+    depends_on:
+      kong:
+        condition: service_started
+    environment:
+      PORT: 4001
+      FRONTEND_URL: ${SITE_URL:?required}
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_SECRET_KEY: ${SERVICE_ROLE_KEY:?required}
+      CONCENTRATE_API_KEY: ${CONCENTRATE_API_KEY:-}
+      CONCENTRATE_RESPONSES_URL: ${CONCENTRATE_RESPONSES_URL:-}
+      USER_API_KEYS_ENCRYPTION_SECRET: ${USER_API_KEYS_ENCRYPTION_SECRET:?required}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      VLLM_BASE_URL: ${VLLM_BASE_URL:-}
+      VLLM_API_KEY: ${VLLM_API_KEY:-}
+      GENERIC_BASE_URL: ${GENERIC_BASE_URL:-}
+      GENERIC_API_KEY: ${GENERIC_API_KEY:-}
+      R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-mike}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      DOWNLOAD_SIGNING_SECRET: ${DOWNLOAD_SIGNING_SECRET:?required}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4001/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Mike Frontend (Next.js) ───────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: ${ANON_KEY:?required}
+        NEXT_PUBLIC_API_BASE_URL: /api/backend
+    restart: unless-stopped
+    networks:
+      - mike
+    ports:
+      - "4000:4000"     # The only port that needs to be publicly accessible
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: ${ANON_KEY:?required}
+      NEXT_PUBLIC_API_BASE_URL: /api/backend
+      SUPABASE_SECRET_KEY: ${SERVICE_ROLE_KEY:?required}
+      BACKEND_INTERNAL_URL: http://backend:4001
+      SUPABASE_INTERNAL_URL: http://kong:8000
+
+  # ── Ollama (optional, GPU recommended) ────────────────────────────────────
+  # Enable with: docker compose --profile ollama up -d
+  # Requires nvidia-container-toolkit on the host.
+  #
+  # On first start, pull models by running:
+  #   docker compose exec ollama ollama pull qwen3:30b-a3b
+  #
+  # Note: OLLAMA_BASE_URL in backend must be http://ollama:11434/v1/responses
+  # (the docker service name, not localhost). Set this in your .env file.
+  ollama:
+    image: ollama/ollama:latest
+    profiles:
+      - ollama
+    restart: unless-stopped
+    networks:
+      - mike
+    volumes:
+      - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ── Ollama model init (runs once, pulls configured models) ─────────────────
+  ollama-init:
+    image: ollama/ollama:latest
+    profiles:
+      - ollama
+    networks:
+      - mike
+    depends_on:
+      - ollama
+    restart: on-failure
+    entrypoint: >
+      sh -c "
+        echo 'Waiting for Ollama...';
+        until ollama list > /dev/null 2>&1; do sleep 2; done;
+        echo 'Pulling ${OLLAMA_MODEL:-qwen3:30b-a3b}...';
+        ollama pull ${OLLAMA_MODEL:-qwen3:30b-a3b};
+        echo 'Done.';
+      "
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+
+networks:
+  mike:
+    driver: bridge
+
+volumes:
+  db-data:
+  ollama-data:

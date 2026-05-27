@@ -7,6 +7,9 @@ const BACKEND_INTERNAL_URL = process.env.BACKEND_INTERNAL_URL ?? "http://localho
 
 const nextConfig: NextConfig = {
     reactCompiler: true,
+    // Standalone output bundles everything needed to run without node_modules.
+    // Used by the Docker image — see frontend/Dockerfile.
+    output: "standalone",
     async rewrites() {
         return [
             // Proxy the Express backend. Browser calls /api/backend/... and

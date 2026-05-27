@@ -102,6 +102,9 @@ app.use(
 
 app.use(generalLimiter);
 
+// Health check — used by Docker compose and load balancers
+app.get("/healthz", (_req, res) => res.json({ ok: true }));
+
 app.use(express.json({ limit: "50mb" }));
 
 app.post("/chat", chatLimiter);
