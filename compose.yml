@@ -32,12 +32,12 @@ services:
     extra_hosts:
       - "host-gateway:host-gateway"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:4001/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:${BACKEND_PORT:-3001}/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5
     environment:
-      PORT: 4001
+      PORT: ${BACKEND_PORT:-3001}
       FRONTEND_URL: ${SITE_URL:?required}
       SUPABASE_URL: ${SUPABASE_URL:?required}
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:?required}
@@ -67,20 +67,21 @@ services:
       args:
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: ${SUPABASE_ANON_KEY:?required}
         NEXT_PUBLIC_API_BASE_URL: /api/backend
+        NEXT_OUTPUT: standalone
     extra_hosts:
       - "host-gateway:host-gateway"
     restart: unless-stopped
     ports:
-      - "${PORT:-4000}:4000"   # only port that needs to be publicly accessible
+      - "${FRONTEND_PORT:-3000}:3000"   # only port that needs to be publicly accessible
     depends_on:
       backend:
         condition: service_healthy
     environment:
-      PORT: 4000
+      PORT: 3000
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY: ${SUPABASE_ANON_KEY:?required}
       NEXT_PUBLIC_API_BASE_URL: /api/backend
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:?required}
-      BACKEND_INTERNAL_URL: http://backend:4001
+      BACKEND_INTERNAL_URL: http://backend:${BACKEND_PORT:-3001}
       SUPABASE_INTERNAL_URL: ${SUPABASE_URL:?required}
 
   # ── Ollama (optional, GPU recommended) ────────────────────────────────────

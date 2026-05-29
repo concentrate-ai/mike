@@ -2,9 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
     reactCompiler: true,
-    // Standalone output bundles everything needed to run without node_modules.
-    // Used by the Docker image — see frontend/Dockerfile.
-    output: "standalone",
+    // Standalone output is only needed for the Docker image (bundles everything
+    // needed to run without node_modules). Set NEXT_OUTPUT=standalone in the
+    // Docker build to enable it — otherwise it stays default, which is
+    // compatible with Vercel, Cloudflare Pages, and local development.
+    ...(process.env.NEXT_OUTPUT === "standalone" ? { output: "standalone" } : {}),
     async rewrites() {
         return [
             {

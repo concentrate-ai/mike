@@ -1,8 +1,13 @@
 import { test, expect } from "@playwright/test";
 import { signIn, EXISTING_USER } from "../helpers/auth";
 
+// These tests require a Concentrate API key configured on the backend.
+// Skip them when CONCENTRATE_API_KEY is not set in the environment.
+const hasConcentrate = !!process.env.CONCENTRATE_API_KEY;
+
 test.describe("Concentrate integration", () => {
   test.beforeEach(async ({ page }) => {
+    if (!hasConcentrate) test.skip();
     await signIn(page, EXISTING_USER);
   });
 

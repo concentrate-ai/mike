@@ -16,7 +16,8 @@ function resolveSupabaseUrl(): string {
     }
     // Server-side fallback (used during SSR — Supabase SDK won't make real
     // network calls here since auth is client-only).
-    return "http://localhost:4000/api/supabase";
+    const port = process.env.PORT ?? "3000";
+    return `http://localhost:${port}/api/supabase`;
 }
 
 const supabaseUrl = resolveSupabaseUrl();

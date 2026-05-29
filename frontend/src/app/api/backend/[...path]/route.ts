@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-const BACKEND_INTERNAL = process.env.BACKEND_INTERNAL_URL ?? "http://localhost:4001";
+const BACKEND_INTERNAL = process.env.BACKEND_INTERNAL_URL ?? "http://localhost:3001";
 
 async function proxy(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
     const { path } = await params;
