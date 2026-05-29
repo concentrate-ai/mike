@@ -32,7 +32,7 @@ services:
     extra_hosts:
       - "host-gateway:host-gateway"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:${BACKEND_PORT:-3001}/healthz"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:${BACKEND_PORT:-3001}/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
