@@ -232,6 +232,7 @@ export type CatalogModel = {
     id: string;
     display_name: string;
     description?: string;
+    vendor_group?: string;
     context_window?: number;
     max_output_tokens?: number;
     supports_tools?: boolean;
