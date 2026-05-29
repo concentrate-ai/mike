@@ -36,8 +36,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    volumes:
+      - local-storage:/app/local-storage   # persists files when R2 is not configured
     environment:
       PORT: ${BACKEND_PORT:-3001}
+      LOCAL_STORAGE_DIR: /app/local-storage
       FRONTEND_URL: ${SITE_URL:?required}
       SUPABASE_URL: ${SUPABASE_URL:?required}
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:?required}
@@ -126,4 +129,5 @@ services:
       OLLAMA_HOST: http://ollama:11434
 
 volumes:
+  local-storage:   # document storage when R2 is not configured (see SETUP.md)
   ollama-data:
