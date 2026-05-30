@@ -6,6 +6,7 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -90,6 +91,25 @@ export default function PreferencesPage() {
     );
 }
 
+// Provider display order: Anthropic first, then alphabetical
+const PROVIDER_ORDER: Record<string, number> = {
+    claude: 1,
+    anthropic: 1,
+    concentrate: 2,
+    gemini: 3,
+    google: 3,
+    openai: 4,
+};
+
+const PROVIDER_LABEL: Record<string, string> = {
+    claude: "Anthropic",
+    anthropic: "Anthropic",
+    concentrate: "Concentrate",
+    gemini: "Google",
+    google: "Google",
+    openai: "OpenAI",
+};
+
 function TierDropdown({
     value, models, placeholder, onChange,
 }: {
@@ -100,6 +120,25 @@ function TierDropdown({
 }) {
     const [open, setOpen] = useState(false);
     const selected = value ? models.find((m) => `${m.provider}:${m.id}` === value) : null;
+
+    // Group by provider, sort providers by order, sort models within each group by name
+    const groups = models.reduce<Record<string, CatalogModel[]>>((acc, m) => {
+        const key = m.provider;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(m);
+        return acc;
+    }, {});
+
+    const sortedProviders = Object.keys(groups).sort((a, b) => {
+        const oa = PROVIDER_ORDER[a] ?? 99;
+        const ob = PROVIDER_ORDER[b] ?? 99;
+        if (oa !== ob) return oa - ob;
+        return a.localeCompare(b);
+    });
+
+    for (const provider of sortedProviders) {
+        groups[provider].sort((a, b) => a.display_name.localeCompare(b.display_name));
+    }
 
     return (
         <DropdownMenu onOpenChange={setOpen}>
@@ -115,7 +154,7 @@ function TierDropdown({
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-                className="z-50 max-h-64 overflow-y-auto"
+                className="z-50 max-h-72 overflow-y-auto"
                 style={{ width: "var(--radix-dropdown-menu-trigger-width)" }}
                 align="start"
             >
@@ -124,7 +163,13 @@ function TierDropdown({
                     {!value && <Check className="h-3.5 w-3.5 ml-1 text-gray-400" />}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {models.map((m) => {
+                {sortedProviders.map((provider, pi) => (
+                    <div key={provider}>
+                        {pi > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-gray-400 py-1">
+                            {PROVIDER_LABEL[provider] ?? provider}
+                        </DropdownMenuLabel>
+                        {groups[provider].map((m) => {
                     const qid = `${m.provider}:${m.id}`;
                     return (
                         <DropdownMenuItem key={qid} className="cursor-pointer" onSelect={() => onChange(qid)}>
@@ -140,6 +185,8 @@ function TierDropdown({
                         </DropdownMenuItem>
                     );
                 })}
+                    </div>
+                ))}
                 {models.length === 0 && (
                     <DropdownMenuItem disabled className="text-gray-400 text-xs">
                         No enabled models.
