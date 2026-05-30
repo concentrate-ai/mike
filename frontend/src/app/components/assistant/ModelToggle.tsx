@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { ApiKeyState } from "@/app/lib/mikeApi";
 import type { CatalogModel } from "@/app/lib/providerModels";
-import { getProviderModels, CATALOG_PROVIDERS } from "@/app/lib/providerModels";
+import { getMergedModels } from "@/app/lib/providerModels";
 import type { ModelOption } from "@/app/lib/models";
 import { MODELS } from "@/app/lib/models";
 
@@ -85,9 +85,9 @@ export function useModels(
             setCachedDetails(catalogDetails);
             return;
         }
-        // Proactively fetch all provider catalogs to populate ZDR etc.
-        Promise.all(CATALOG_PROVIDERS.map((p) => getProviderModels(p.id)))
-            .then((results) => setCachedDetails(results.flat()))
+        // Proactively fetch merged catalog to populate ZDR etc.
+        getMergedModels()
+            .then(setCachedDetails)
             .catch(() => {});
     }, [catalogDetails]);
 

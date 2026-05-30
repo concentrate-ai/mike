@@ -220,6 +220,13 @@ export async function fetchProviderModels(
     return res.models;
 }
 
+export async function fetchMergedModels(): Promise<CatalogModel[]> {
+    const res = await apiRequest<{ models: CatalogModel[] }>(
+        `/providers/merged/models`,
+    );
+    return res.models;
+}
+
 export type CatalogModel = {
     provider: string;
     id: string;

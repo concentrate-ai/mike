@@ -1,5 +1,5 @@
 import type { CatalogModel } from "./mikeApi";
-import { fetchProviderModels } from "./mikeApi";
+import { fetchProviderModels, fetchMergedModels } from "./mikeApi";
 
 export type { CatalogModel };
 
@@ -19,10 +19,6 @@ export function clearProviderModelsCache(providerId?: string): void {
     }
 }
 
-export type ProviderModelsResult =
-    | { ok: true; models: CatalogModel[] }
-    | { ok: false; error: string };
-
 export async function getProviderModels(providerId: string): Promise<CatalogModel[]> {
     const cached = cache.get(providerId);
     if (cached && Date.now() - cached.fetchedAt < CLIENT_CACHE_TTL_MS) {
@@ -38,18 +34,22 @@ export async function getProviderModels(providerId: string): Promise<CatalogMode
     }
 }
 
-/** Map a backend provider id to a human-readable tab label. */
-export function providerTabLabel(providerId: string): string {
-    const labels: Record<string, string> = {
-        concentrate: "Concentrate",
-        anthropic: "Anthropic",
-        gemini: "Google",
-        openai: "OpenAI",
-    };
-    return labels[providerId] ?? providerId;
+export async function getMergedModels(): Promise<CatalogModel[]> {
+    const CACHE_KEY = "__merged_v2__";
+    const cached = cache.get(CACHE_KEY);
+    if (cached && Date.now() - cached.fetchedAt < CLIENT_CACHE_TTL_MS) {
+        return cached.models;
+    }
+    try {
+        const models = await fetchMergedModels();
+        cache.set(CACHE_KEY, { models, fetchedAt: Date.now() });
+        return models;
+    } catch (err) {
+        console.error("[providerModels] merged fetch failed:", err);
+        return cache.get(CACHE_KEY)?.models ?? [];
+    }
 }
 
-/** Which backend endpoint ids correspond to which user api key provider ids. */
 export const CATALOG_PROVIDERS: {
     id: string;
     apiKeyProvider: string;
