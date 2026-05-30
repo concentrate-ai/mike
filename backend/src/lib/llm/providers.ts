@@ -8,16 +8,6 @@
  *   - adapterType   — which SDK/protocol family this provider uses
  *   - modelIdPrefixes — for inferring a provider from a bare model id
  *   - resolveBaseUrl — optional base-URL override (env-driven)
- *
- * Adding a new OpenAI-Responses-compatible provider (OpenRouter, LiteLLM in
- * Responses mode, vLLM, Ollama OpenAI shim, etc.) is two steps:
- *   1. Extend the Provider union in types.ts with the new id.
- *   2. Add an entry below with adapterType: "openai-responses" and the
- *      provider's baseUrl + env var name. The DB user_api_keys CHECK
- *      constraint also needs the new value via a migration.
- *
- * The llm/index.ts router and userApiKeys.ts both consult this registry, so
- * no other code changes are needed for routing or for env-key resolution.
  */
 import type { Provider, UserApiKeys } from "./types";
 
@@ -74,31 +64,6 @@ export const PROVIDERS: readonly ProviderDef[] = [
         adapterType: "openai-responses",
         // Concentrate is the catch-all: a bare model id with no known prefix
         // falls through to it. Leaving prefixes empty here keeps that behavior.
-        modelIdPrefixes: [],
-    },
-    {
-        id: "ollama",
-        label: "Ollama",
-        envKey: "OLLAMA_API_KEY",
-        envBaseUrl: "OLLAMA_BASE_URL",
-        defaultBaseUrl: "http://localhost:11434/v1/responses",
-        adapterType: "openai-responses",
-        modelIdPrefixes: [],
-    },
-    {
-        id: "vllm",
-        label: "vLLM",
-        envKey: "VLLM_API_KEY",
-        envBaseUrl: "VLLM_BASE_URL",
-        adapterType: "openai-responses",
-        modelIdPrefixes: [],
-    },
-    {
-        id: "generic",
-        label: "Custom Endpoint",
-        envKey: "GENERIC_API_KEY",
-        envBaseUrl: "GENERIC_BASE_URL",
-        adapterType: "openai-responses",
         modelIdPrefixes: [],
     },
 ];

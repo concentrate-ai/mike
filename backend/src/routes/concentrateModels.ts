@@ -46,12 +46,14 @@ async function fetchModelsFromApi(key: string): Promise<ConcentrateModel[]> {
         author?: { slug?: string };
         providers?: Record<string, RawProvider>;
     };
-    return (models as RawModel[]).map((m) => ({
-        id: m.slug ?? "",
-        name: m.name ?? m.slug ?? "",
-        author: m.author?.slug ?? "unknown",
-        zdr: !!m.providers && typeof m.providers === "object" && Object.values(m.providers).some((p) => !!p.zdr),
-    }));
+    return (models as RawModel[])
+        .map((m) => ({
+            id: m.slug ?? "",
+            name: m.name ?? m.slug ?? "",
+            author: m.author?.slug ?? "unknown",
+            zdr: !!m.providers && typeof m.providers === "object" && Object.values(m.providers).some((p) => !!p.zdr),
+        }))
+        .filter((m) => m.zdr);
 }
 
 concentrateModelsRouter.get(

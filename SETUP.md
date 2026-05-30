@@ -84,22 +84,6 @@ docker compose logs frontend --tail=20
 
 Open **http://localhost:3000** (or the port you mapped).
 
-### With Ollama (local LLM)
-
-Requires an NVIDIA GPU and [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
-
-```bash
-# Set in .env:
-OLLAMA_BASE_URL=http://ollama:11434/v1/responses
-OLLAMA_MODEL=qwen3:30b-a3b   # or any model Ollama supports
-
-docker compose --profile ollama up -d
-
-# Models are pulled automatically on first start by the ollama-init service.
-# To pull additional models:
-docker compose exec ollama ollama pull llama3.2
-```
-
 ---
 
 ## Option C — Cloudflare tunnel (expose local to internet)
@@ -174,30 +158,8 @@ done
 
 ## File storage
 
-Mike stores uploaded documents in one of two places depending on your config:
-
-### Local disk (default — no config required)
-
-When R2 env vars are not set, files are written to `backend/local-storage/` on
-the backend container's filesystem (or the backend process's working directory
-in local dev).
-
-**⚠ Local disk is ephemeral in Docker.** Files written inside the container are
-lost when the container is removed. Mount a volume to persist them:
-
-```yaml
-# In compose.yml, add to the backend service:
-volumes:
-  - ./data/local-storage:/app/local-storage
-```
-
-Or set `LOCAL_STORAGE_DIR` to a path inside a named volume. Local disk is fine
-for development and single-server deployments where you don't mind the data
-living on that machine.
-
-### Cloudflare R2 (recommended for production)
-
-Set four env vars and Mike automatically switches to R2:
+Mike stores uploaded documents in Cloudflare R2 (or any S3-compatible store).
+Set four env vars to configure it:
 
 ```bash
 R2_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
@@ -207,10 +169,7 @@ R2_BUCKET_NAME=mike   # or whatever you named your bucket
 ```
 
 Files are stored as `documents/<user-id>/<doc-id>/source.<ext>`. R2 is S3-compatible
-so any S3-compatible store (MinIO, Tigris, Backblaze B2) works with the same vars.
-
-**Signed URL downloads** only work with R2/S3 — the local disk fallback returns
-`null` for signed URLs and falls back to streaming the file through the backend.
+so any S3-compatible store (Tigris, Backblaze B2) works with the same vars.
 
 ---
 
@@ -231,16 +190,10 @@ so any S3-compatible store (MinIO, Tigris, Backblaze B2) works with the same var
 | `ANTHROPIC_API_KEY` | — | Direct Anthropic key |
 | `OPENAI_API_KEY` | — | Direct OpenAI key |
 | `GEMINI_API_KEY` | — | Direct Google key |
-| `OLLAMA_BASE_URL` | no | Ollama `/v1/responses` endpoint |
-| `VLLM_BASE_URL` | no | vLLM `/v1/responses` endpoint |
-| `VLLM_API_KEY` | no | vLLM bearer key |
-| `GENERIC_BASE_URL` | no | Any OpenAI-Responses-compatible endpoint |
-| `GENERIC_API_KEY` | no | Key for generic endpoint |
-| `R2_ENDPOINT_URL` | no | R2/S3 endpoint — omit to use local disk |
-| `R2_ACCESS_KEY_ID` | no | R2 access key |
-| `R2_SECRET_ACCESS_KEY` | no | R2 secret key |
+| `R2_ENDPOINT_URL` | yes | R2/S3 endpoint |
+| `R2_ACCESS_KEY_ID` | yes | R2 access key |
+| `R2_SECRET_ACCESS_KEY` | yes | R2 secret key |
 | `R2_BUCKET_NAME` | no | Bucket name (default `mike`) |
-| `LOCAL_STORAGE_DIR` | no | Override local disk path (default `./local-storage`) |
 | `RESEND_API_KEY` | no | Resend key for transactional email |
 
 At least one AI provider key is required. `CONCENTRATE_API_KEY` is the simplest
@@ -274,8 +227,6 @@ You need at least one. Options:
 | Anthropic | `ANTHROPIC_API_KEY` | Claude models only |
 | OpenAI | `OPENAI_API_KEY` | GPT models only |
 | Google | `GEMINI_API_KEY` | Gemini models only |
-| Ollama | `OLLAMA_BASE_URL` | Self-hosted open-source models |
-| vLLM | `VLLM_BASE_URL` + `VLLM_API_KEY` | Self-hosted, any model |
 
 Provider keys can also be added per-user in **Settings → Providers**.
 A key in `backend/.env` applies to all users; a key added in Settings applies only

@@ -20,27 +20,43 @@ import { MODELS } from "@/app/lib/models";
 export { MODELS, type ModelOption } from "@/app/lib/models";
 export { DEFAULT_MODEL_ID, ALLOWED_MODEL_IDS } from "@/app/lib/models";
 
+// Maps routing provider → display author. Concentrate models are grouped by
+// their actual model author so the routing layer stays invisible in the UI.
 const PROVIDER_LABELS: Record<string, string> = {
-    concentrate: "Concentrate",
     claude: "Anthropic",
     gemini: "Google",
     openai: "OpenAI",
-    generic: "Custom",
 };
+
+// Infer a human-readable author group from a model label or slug.
+// Used for Concentrate models that carry their own author from the API.
+function authorFromLabel(label: string): string {
+    const l = label.toLowerCase();
+    if (l.includes("claude")) return "Anthropic";
+    if (l.includes("gemini") || l.includes("gemma")) return "Google";
+    if (l.includes("gpt") || l.includes("o1") || l.includes("o3") || l.includes("o4")) return "OpenAI";
+    if (l.includes("deepseek")) return "DeepSeek";
+    if (l.includes("llama")) return "Meta";
+    if (l.includes("mistral") || l.includes("magistral")) return "Mistral";
+    if (l.includes("grok")) return "xAI";
+    if (l.includes("qwen") || l.includes("qwq")) return "Alibaba";
+    if (l.includes("kimi")) return "Moonshot";
+    if (l.includes("minimax")) return "MiniMax";
+    return "Other";
+}
 
 function qualifiedIdToOption(qid: string): ModelOption | null {
     const colon = qid.indexOf(":");
     if (colon === -1) {
-        // Legacy bare id — fall back to hardcoded MODELS list
         return MODELS.find((m) => m.id === qid) ?? null;
     }
     const provider = qid.slice(0, colon);
     const slug = qid.slice(colon + 1);
-    const group = PROVIDER_LABELS[provider] ?? provider;
-    // Pretty-print: try to match a known label from the hardcoded list first
     const known = MODELS.find((m) => m.id === slug);
+    // Group by model author, not routing provider
+    const group = known?.group ?? PROVIDER_LABELS[provider] ?? authorFromLabel(slug);
     return {
-        id: qid,          // use qualified id so routing knows the provider
+        id: qid,
         label: known?.label ?? slug,
         group,
         zdr: known?.zdr,
@@ -99,9 +115,11 @@ export function useModels(
                 const slug = qid.includes(":") ? qid.split(":")[1] : qid;
                 const cat = catalogBySlug.get(qid) ?? catalogBySlug.get(slug ?? "");
                 if (cat) {
+                    const enrichedLabel = cat.display_name || opt.label;
                     return {
                         ...opt,
-                        label: cat.display_name || opt.label,
+                        label: enrichedLabel,
+                        group: opt.group === "Other" ? authorFromLabel(enrichedLabel) : opt.group,
                         zdr: cat.zdr ?? opt.zdr,
                     };
                 }
@@ -179,7 +197,7 @@ export function ModelToggle({
                         <div key={group}>
                             {gi > 0 && <DropdownMenuSeparator />}
                             <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 flex items-center gap-1.5 py-1.5">
-                                {group === "Favorites" && <Star className="h-3 w-3 fill-amber-400 text-amber-400" />}
+                                {group === "Favorites" && <Star className="h-3 w-3 fill-gray-400 text-gray-400" />}
                                 {group}
                             </DropdownMenuLabel>
                             {groupItems.map((m) => {
@@ -202,7 +220,7 @@ export function ModelToggle({
                                                 aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
                                             >
                                                 <Star
-                                                    className={`h-3.5 w-3.5 ${isFav ? "fill-yellow-400 text-yellow-400" : "text-gray-300 hover:text-yellow-400"}`}
+                                                    className={`h-3.5 w-3.5 ${isFav ? "fill-gray-400 text-gray-400" : "text-gray-300 hover:text-gray-500"}`}
                                                 />
                                             </button>
                                         )}
@@ -210,7 +228,7 @@ export function ModelToggle({
                                         {showZdr && m.zdr && (
                                             <span title="Zero Data Retention — your data is not used for training" className="inline-flex ml-1 shrink-0">
                                                 <Shield
-                                                    className="h-3.5 w-3.5 text-emerald-600 fill-emerald-50"
+                                                    className="h-3.5 w-3.5 text-gray-400 fill-gray-100"
                                                     aria-label="Zero Data Retention"
                                                 />
                                             </span>

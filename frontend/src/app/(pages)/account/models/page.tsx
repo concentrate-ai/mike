@@ -6,6 +6,7 @@ import {
     ChevronDown,
     Star,
     Loader2,
+    Shield,
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -20,7 +21,6 @@ import type { CatalogModel } from "@/app/lib/mikeApi";
 import {
     CATALOG_PROVIDERS,
     getProviderModels,
-    getLocalProviders,
     clearProviderModelsCache,
 } from "@/app/lib/providerModels";
 
@@ -54,8 +54,9 @@ export default function ModelsPage() {
     const { profile, updateTierModel, toggleFavoriteModel, setEnabledModels } =
         useUserProfile();
 
-    // Which provider tab is active in the catalog
-    const [activeTab, setActiveTab] = useState<string>("concentrate");
+    const activeTab = "concentrate";
+    // ZDR-only filter — on by default when Concentrate is configured
+    const [zdrOnly, setZdrOnly] = useState(true);
 
     // Catalog models fetched for the active tab
     const [catalogModels, setCatalogModels] = useState<CatalogModel[]>([]);
@@ -64,16 +65,7 @@ export default function ModelsPage() {
     // All enabled + custom model ids
     const enabledModels = profile?.enabledModels ?? [];
     const favoriteModels = profile?.favoriteModels ?? [];
-    // Local providers (Ollama, vLLM, Custom) — shown when server has them configured
-    const [localProviders, setLocalProviders] = useState<{ id: string; label: string }[]>([]);
-    useEffect(() => {
-        getLocalProviders().then(setLocalProviders);
-    }, []);
-
-    const availableProviders = [
-        ...CATALOG_PROVIDERS,
-        ...localProviders.map((p) => ({ id: p.id, apiKeyProvider: p.id, label: p.label })),
-    ];
+    const availableProviders = CATALOG_PROVIDERS;
 
     // Build flat list of all enabled models for tier dropdowns
     const [allEnabledDetails, setAllEnabledDetails] = useState<CatalogModel[]>([]);
@@ -169,23 +161,30 @@ export default function ModelsPage() {
                     and in the per-review model picker. Star to mark favorites.
                 </p>
 
-                {/* Provider tabs */}
-                <div className="flex gap-1 mb-4 flex-wrap">
-                    {availableProviders.map((p) => (
+                {/* ZDR filter — only shown when Concentrate key is configured */}
+                {profile?.apiKeys.concentrate?.configured && (
+                    <div className="flex justify-end mb-4">
                         <button
-                            key={p.id}
                             type="button"
-                            onClick={() => setActiveTab(p.id)}
-                            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                                activeTab === p.id
-                                    ? "bg-gray-900 text-white"
-                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                            }`}
+                            onClick={() => setZdrOnly((v) => !v)}
+                            className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+                            title="Zero Data Retention — your data is never used for training"
                         >
-                            {p.label}
+                            <span
+                                className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-colors ${
+                                    zdrOnly ? "bg-gray-900 border-gray-900" : "bg-gray-200 border-gray-200"
+                                }`}
+                            >
+                                <span
+                                    className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                                        zdrOnly ? "translate-x-3" : "translate-x-0.5"
+                                    }`}
+                                />
+                            </span>
+                            ZDR only
                         </button>
-                    ))}
-                </div>
+                    </div>
+                )}
 
                 {catalogLoading ? (
                     <div className="flex items-center gap-2 py-8 text-gray-400">
@@ -221,7 +220,7 @@ export default function ModelsPage() {
                     </div>
                 ) : (
                     <CatalogTable
-                        models={catalogModels}
+                        models={profile?.apiKeys.concentrate?.configured && zdrOnly ? catalogModels.filter((m) => m.zdr) : catalogModels}
                         enabledModels={enabledModels}
                         favoriteModels={favoriteModels}
                         onToggleEnabled={handleToggleEnabled}
@@ -251,12 +250,6 @@ function TierDropdown({
     const [open, setOpen] = useState(false);
     const selected = value ? models.find((m) => `${m.provider}:${m.id}` === value) : null;
 
-    // Group by provider
-    const groups: string[] = [];
-    for (const m of models) {
-        if (!groups.includes(m.provider)) groups.push(m.provider);
-    }
-
     return (
         <DropdownMenu onOpenChange={setOpen}>
             <DropdownMenuTrigger asChild>
@@ -273,7 +266,7 @@ function TierDropdown({
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-                className="z-50"
+                className="z-50 max-h-64 overflow-y-auto"
                 style={{ width: "var(--radix-dropdown-menu-trigger-width)" }}
                 align="start"
             >
@@ -285,30 +278,26 @@ function TierDropdown({
                     {!value && <Check className="h-3.5 w-3.5 ml-1 text-gray-400" />}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {groups.map((group, gi) => {
-                    const items = models.filter((m) => m.provider === group);
+                {models.map((m) => {
+                    const qid = `${m.provider}:${m.id}`;
                     return (
-                        <div key={group}>
-                            {gi > 0 && <DropdownMenuSeparator />}
-                            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-gray-400">
-                                {group}
-                            </DropdownMenuLabel>
-                            {items.map((m) => {
-                                const qid = `${m.provider}:${m.id}`;
-                                return (
-                                    <DropdownMenuItem
-                                        key={qid}
-                                        className="cursor-pointer"
-                                        onSelect={() => onChange(qid)}
-                                    >
-                                        <span className="flex-1">{m.display_name}</span>
-                                        {value === qid && (
-                                            <Check className="h-3.5 w-3.5 text-gray-600 ml-1" />
-                                        )}
-                                    </DropdownMenuItem>
-                                );
-                            })}
-                        </div>
+                        <DropdownMenuItem
+                            key={qid}
+                            className="cursor-pointer"
+                            onSelect={() => onChange(qid)}
+                        >
+                            <span className="flex-1">{m.display_name}</span>
+                            {value === qid && (
+                                <Check className="h-3.5 w-3.5 text-gray-600 shrink-0 ml-1" />
+                            )}
+                            <span className="w-5 flex justify-center shrink-0">
+                                {m.zdr && (
+                                    <span title="Zero Data Retention">
+                                        <Shield className="h-3.5 w-3.5 text-gray-400 fill-gray-100" />
+                                    </span>
+                                )}
+                            </span>
+                        </DropdownMenuItem>
                     );
                 })}
                 {models.length === 0 && (
@@ -427,7 +416,7 @@ function CatalogTable({
                                         aria-label={favorite ? `Remove ${m.display_name} from favorites` : `Add ${m.display_name} to favorites`}
                                         title={favorite ? "Favorited — appears at top of model picker" : "Add to favorites"}
                                     >
-                                        <Star className={`h-3.5 w-3.5 ${favorite ? "fill-amber-400/70 text-amber-400/70" : "text-gray-200 hover:text-gray-300"}`} />
+                                        <Star className={`h-3.5 w-3.5 ${favorite ? "fill-gray-400 text-gray-400" : "text-gray-200 hover:text-gray-400"}`} />
                                     </button>
                                 </td>
                                 {/* Name + slug */}
@@ -492,14 +481,14 @@ function CapIcon({ type, active }: { type: "tools" | "images" | "pdf" | "reasoni
     let svg: React.ReactNode;
 
     if (type === "tools") {
-        const cls = active ? `${size} text-blue-400/80` : `${size} text-gray-200`;
+        const cls = active ? `${size} text-gray-500` : `${size} text-gray-200`;
         svg = (
             <svg role="img" aria-label={label} className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M3 13L10 6M13 3a2 2 0 01-3 3L6 10l-3 1 1-3 4-4a2 2 0 013-3z" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
         );
     } else if (type === "images") {
-        const cls = active ? `${size} text-violet-400/80` : `${size} text-gray-200`;
+        const cls = active ? `${size} text-gray-500` : `${size} text-gray-200`;
         svg = (
             <svg role="img" aria-label={label} className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/>
@@ -508,7 +497,7 @@ function CapIcon({ type, active }: { type: "tools" | "images" | "pdf" | "reasoni
             </svg>
         );
     } else if (type === "pdf") {
-        const cls = active ? `${size} text-orange-400/80` : `${size} text-gray-200`;
+        const cls = active ? `${size} text-gray-500` : `${size} text-gray-200`;
         svg = (
             <svg role="img" aria-label={label} className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M9 1.5H4a1 1 0 00-1 1v11a1 1 0 001 1h8a1 1 0 001-1V6L9 1.5z" strokeLinecap="round" strokeLinejoin="round"/>
@@ -517,7 +506,7 @@ function CapIcon({ type, active }: { type: "tools" | "images" | "pdf" | "reasoni
             </svg>
         );
     } else if (type === "reasoning") {
-        const cls = active ? `${size} text-amber-400/80` : `${size} text-gray-200`;
+        const cls = active ? `${size} text-gray-500` : `${size} text-gray-200`;
         svg = (
             <svg role="img" aria-label={label} className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M8 1.5a4.5 4.5 0 014.5 4.5c0 1.8-1 3.3-2.5 4.1V11.5a1 1 0 01-1 1h-2a1 1 0 01-1-1v-1.4A4.5 4.5 0 018 1.5z" strokeLinecap="round" strokeLinejoin="round"/>
@@ -527,7 +516,7 @@ function CapIcon({ type, active }: { type: "tools" | "images" | "pdf" | "reasoni
     } else if (active) {
         // ZDR active — filled green shield with checkmark
         svg = (
-            <svg role="img" aria-label={label} className={`${size} text-emerald-500/75`} viewBox="0 0 16 16" fill="currentColor">
+            <svg role="img" aria-label={label} className={`${size} text-gray-500`} viewBox="0 0 16 16" fill="currentColor">
                 <path d="M8 1L2 3.5v5C2 11.8 4.7 14.5 8 15.5c3.3-1 6-3.7 6-7V3.5L8 1z"/>
                 <path d="M5.5 8l1.8 1.8L10.5 6.5" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>

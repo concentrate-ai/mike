@@ -1,5 +1,5 @@
 import type { CatalogModel } from "./mikeApi";
-import { fetchProviderModels, fetchLocalProviders } from "./mikeApi";
+import { fetchProviderModels } from "./mikeApi";
 
 export type { CatalogModel };
 
@@ -45,9 +45,6 @@ export function providerTabLabel(providerId: string): string {
         anthropic: "Anthropic",
         gemini: "Google",
         openai: "OpenAI",
-        ollama: "Ollama",
-        vllm: "vLLM",
-        generic: "Custom",
     };
     return labels[providerId] ?? providerId;
 }
@@ -59,23 +56,4 @@ export const CATALOG_PROVIDERS: {
     label: string;
 }[] = [
     { id: "concentrate", apiKeyProvider: "concentrate", label: "Concentrate" },
-    { id: "anthropic", apiKeyProvider: "claude", label: "Anthropic" },
-    { id: "gemini", apiKeyProvider: "gemini", label: "Google" },
-    { id: "openai", apiKeyProvider: "openai", label: "OpenAI" },
-    // Ollama, vLLM, and Custom are added dynamically from /providers/local-providers
-    // when the server has them configured.
 ];
-
-// Cache for local provider tabs (Ollama, vLLM, Custom)
-let localProvidersCache: { id: string; label: string }[] | null = null;
-
-export async function getLocalProviders(): Promise<{ id: string; label: string }[]> {
-    if (localProvidersCache !== null) return localProvidersCache;
-    try {
-        const providers = await fetchLocalProviders();
-        localProvidersCache = providers;
-        return localProvidersCache;
-    } catch {
-        return [];
-    }
-}

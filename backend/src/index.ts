@@ -13,7 +13,7 @@ import { userRouter } from "./routes/user";
 import { downloadsRouter } from "./routes/downloads";
 import { concentrateModelsRouter } from "./routes/concentrateModels";
 import { providerModelsRouter } from "./routes/providerModels";
-import { hostFilesRouter } from "./routes/hostFiles";
+
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -128,7 +128,7 @@ app.use("/users", userRouter);
 app.use("/download", downloadsRouter);
 app.use("/concentrate/models", concentrateModelsRouter);
 app.use("/providers", providerModelsRouter);
-app.use("/host-files", hostFilesRouter);
+
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 

@@ -12,7 +12,7 @@ const PROVIDERS = [
         label: "Concentrate",
         envVar: "CONCENTRATE_API_KEY",
         placeholder: "sk-cn-…",
-        description: "Routes to Anthropic, Google, OpenAI, DeepSeek, Llama, Mistral & 100+ models.",
+        description: "Routes to 100+ models. Mike uses Zero Data Retention (ZDR) models only — your data is never used for training.",
         link: "https://concentrate.ai",
     },
     {
@@ -43,8 +43,7 @@ export default function ApiKeysPage() {
             <div>
                 <h2 className="text-2xl font-medium font-serif">Providers</h2>
                 <p className="text-sm text-gray-400 mt-1">
-                    Mike speaks directly to each provider. Add a key to enable its models.
-                    The Models page only shows providers you have configured.
+                    Add a key to enable a provider. The Models page only shows providers you have configured.
                 </p>
             </div>
 
@@ -56,8 +55,6 @@ export default function ApiKeysPage() {
                         label={p.label}
                         envVar={p.envVar}
                         placeholder={p.placeholder}
-                        description={"description" in p ? p.description : undefined}
-                        link={"link" in p ? p.link : undefined}
                         configured={!!profile?.apiKeys[p.provider]?.configured}
                         serverConfigured={profile?.apiKeys[p.provider]?.source === "env"}
                         onSave={(value) => updateApiKey(p.provider, value || null)}
@@ -65,6 +62,17 @@ export default function ApiKeysPage() {
                     />
                 ))}
             </div>
+
+            {/* Concentrate footnote — outside the card so rows stay uniform height */}
+            <p className="text-xs text-gray-400 leading-relaxed">
+                Concentrate routes to 100+ models via a single key. Mike uses{" "}
+                <span className="text-gray-500 font-medium">Zero Data Retention (ZDR)</span>{" "}
+                models only — your data is never used for training.{" "}
+                <a href="https://concentrate.ai" target="_blank" rel="noopener noreferrer"
+                    className="underline underline-offset-2 hover:text-gray-600 transition-colors">
+                    concentrate.ai
+                </a>
+            </p>
         </div>
     );
 }
@@ -74,8 +82,6 @@ function ProviderRow({
     label,
     envVar,
     placeholder,
-    description,
-    link,
     configured,
     serverConfigured,
     onSave,
@@ -85,8 +91,6 @@ function ProviderRow({
     label: string;
     envVar: string;
     placeholder: string;
-    description?: string;
-    link?: string;
     configured: boolean;
     serverConfigured: boolean;
     onSave: (value: string) => Promise<boolean>;
@@ -152,119 +156,86 @@ function ProviderRow({
         setVerified(null);
     };
 
-    // Status indicator
     let statusNode: React.ReactNode = null;
     if (verifying) {
-        statusNode = (
-            <span className="text-xs text-gray-400 animate-pulse">checking…</span>
-        );
+        statusNode = <span className="text-xs text-gray-400 animate-pulse">checking…</span>;
     } else if (verified === true) {
         statusNode = (
-            <span
-                title="We checked the API and the key is valid"
-                className="flex items-center gap-1 text-xs text-green-600 cursor-default"
-            >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Verified</span>
+            <span title="Key verified" className="flex items-center gap-1 text-xs text-gray-400 cursor-default">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                <span>Verified</span>
             </span>
         );
     } else if (verified === false) {
         statusNode = (
-            <span
-                title="Key check failed — the API returned an auth error"
-                className="flex items-center gap-1 text-xs text-red-500 cursor-default"
-            >
-                <XCircle className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Invalid</span>
+            <span title="Key check failed" className="flex items-center gap-1 text-xs text-gray-700 cursor-default">
+                <XCircle className="h-3.5 w-3.5 shrink-0" />
+                <span>Invalid</span>
             </span>
+        );
+    }
+
+    // Actions column content — fixed width so all rows align
+    let actionsNode: React.ReactNode = null;
+    if (serverConfigured) {
+        actionsNode = (
+            <span title="Set via server environment — update the variable and redeploy to change" className="text-gray-300 cursor-default">
+                <Lock className="h-3.5 w-3.5" />
+            </span>
+        );
+    } else if (configured && !expanded) {
+        actionsNode = (
+            <span className="flex items-center gap-3">
+                <button type="button" onClick={() => setExpanded(true)}
+                    className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
+                    Replace
+                </button>
+                <button type="button" onClick={handleRemove} disabled={saving}
+                    className="text-xs text-gray-300 hover:text-gray-600 transition-colors">
+                    Remove
+                </button>
+            </span>
+        );
+    } else if (!configured && !expanded) {
+        actionsNode = (
+            <button type="button" onClick={() => setExpanded(true)}
+                className="text-xs text-gray-500 hover:text-gray-800 border border-gray-200 rounded px-2 py-0.5 transition-colors">
+                Add key
+            </button>
         );
     }
 
     return (
         <div className="px-4 py-3">
-            {/* Top row: label + env var + status + actions */}
-            <div className="flex items-center gap-3 min-w-0">
-                {/* Provider name */}
-                <span className="text-sm font-medium text-gray-900 w-24 shrink-0">
+            {/*
+              Grid: [label 120px] [env var 1fr] [status 96px] [actions 120px]
+              Every row uses the same grid so columns lock across all providers.
+            */}
+            <div className="grid items-center gap-x-4"
+                style={{ gridTemplateColumns: "120px 1fr 96px 120px" }}>
+
+                {/* Col 1: provider name */}
+                <span className="text-sm font-medium text-gray-900 truncate">
                     {label}
                 </span>
 
-                {/* Env var chip */}
-                <code className="text-[11px] text-gray-400 font-mono hidden sm:block shrink-0">
+                {/* Col 2: env var */}
+                <code className="text-[11px] text-gray-300 font-mono tracking-wide truncate">
                     {envVar}
                 </code>
 
-                <div className="flex-1" />
+                {/* Col 3: status — right-aligned within its column */}
+                <div className="flex justify-end">
+                    {statusNode}
+                </div>
 
-                {/* Status */}
-                {statusNode && <div className="shrink-0">{statusNode}</div>}
-
-                {/* Lock icon for server-configured */}
-                {serverConfigured && (
-                    <span
-                        title="Set via server .env — to change it, update the environment variable and redeploy"
-                        className="text-gray-300 shrink-0 cursor-default"
-                    >
-                        <Lock className="h-3.5 w-3.5" />
-                    </span>
-                )}
-
-                {/* Edit / remove actions */}
-                {!serverConfigured && (
-                    <>
-                        {configured && !expanded && (
-                            <button
-                                type="button"
-                                onClick={() => setExpanded(true)}
-                                className="text-xs text-gray-400 hover:text-gray-600 transition-colors shrink-0"
-                            >
-                                Replace
-                            </button>
-                        )}
-                        {configured && !expanded && (
-                            <button
-                                type="button"
-                                onClick={handleRemove}
-                                disabled={saving}
-                                className="text-xs text-gray-300 hover:text-red-400 transition-colors shrink-0"
-                            >
-                                Remove
-                            </button>
-                        )}
-                        {!configured && !expanded && (
-                            <button
-                                type="button"
-                                onClick={() => setExpanded(true)}
-                                className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded px-2 py-0.5 transition-colors shrink-0"
-                            >
-                                Add key
-                            </button>
-                        )}
-                    </>
-                )}
+                {/* Col 4: actions — right-aligned */}
+                <div className="flex justify-end">
+                    {actionsNode}
+                </div>
             </div>
 
-            {/* Description (Concentrate only) */}
-            {description && (
-                <p className="text-xs text-gray-400 mt-0.5 ml-0">
-                    {description}
-                    {link && (
-                        <>
-                            {" "}
-                            <a
-                                href={link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="underline hover:text-gray-600"
-                            >
-                                {link.replace(/^https?:\/\//, "")}
-                            </a>
-                        </>
-                    )}
-                </p>
-            )}
-
-            {/* Inline input (expands when editing) */}
+            {/* Inline key input */}
             {expanded && !serverConfigured && (
                 <div className="mt-2 flex items-center gap-2">
                     <div className="relative flex-1">
@@ -277,40 +248,20 @@ function ProviderRow({
                             autoFocus
                             autoComplete="off"
                             spellCheck={false}
-                            className="w-full h-8 rounded-md border border-gray-300 bg-white pl-3 pr-8 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-black/10"
+                            className="w-full h-8 rounded-md border border-gray-200 bg-white pl-3 pr-8 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-black/10"
                         />
-                        <button
-                            type="button"
-                            onClick={() => setReveal((r) => !r)}
+                        <button type="button" onClick={() => setReveal((r) => !r)}
                             className="absolute inset-y-0 right-2 flex items-center text-gray-400 hover:text-gray-600"
-                            tabIndex={-1}
-                        >
-                            {reveal ? (
-                                <EyeOff className="h-3.5 w-3.5" />
-                            ) : (
-                                <Eye className="h-3.5 w-3.5" />
-                            )}
+                            tabIndex={-1}>
+                            {reveal ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                         </button>
                     </div>
-                    <button
-                        type="button"
-                        onClick={handleSave}
-                        disabled={!dirty || saving}
-                        className="h-8 px-3 rounded-md bg-gray-900 text-white text-xs font-medium disabled:opacity-40 hover:bg-gray-700 transition-colors flex items-center gap-1.5"
-                    >
-                        {justSaved ? (
-                            <Check className="h-3.5 w-3.5" />
-                        ) : saving ? (
-                            "…"
-                        ) : (
-                            "Save"
-                        )}
+                    <button type="button" onClick={handleSave} disabled={!dirty || saving}
+                        className="h-8 px-3 rounded-md bg-gray-900 text-white text-xs font-medium disabled:opacity-40 hover:bg-gray-700 transition-colors flex items-center gap-1.5">
+                        {justSaved ? <Check className="h-3.5 w-3.5" /> : saving ? "…" : "Save"}
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => { setValue(""); setExpanded(false); }}
-                        className="text-xs text-gray-400 hover:text-gray-600"
-                    >
+                    <button type="button" onClick={() => { setValue(""); setExpanded(false); }}
+                        className="text-xs text-gray-400 hover:text-gray-600">
                         Cancel
                     </button>
                 </div>

@@ -6,7 +6,6 @@
 | Backend | 3001 | `npm run dev --prefix backend` |
 | Frontend | 3000 | `npm run dev --prefix frontend` |
 | Supabase (local) | 54321 (API) / 54322 (Postgres) | `supabase start` |
-| Ollama | 11434 | `ollama serve` |
 
 Override with `PORT=XXXX` env var for backend or frontend.
 
@@ -64,9 +63,6 @@ cp .env.example .env
 
 # Start app (requires external Supabase — cloud or `supabase start`)
 docker compose up -d
-
-# With Ollama (GPU recommended)
-docker compose --profile ollama up -d
 ```
 
 ## Backend source layout
@@ -86,14 +82,14 @@ backend/src/
     user.ts                   — profile CRUD, tier-models, enabled-models, api-keys
     tabular.ts                — tabular review CRUD + generate/chat
     providerModels/           — GET /providers/:id/models (one normalizer per provider)
-      concentrate.ts, anthropic.ts, gemini.ts, openai.ts, generic.ts
+      concentrate.ts, anthropic.ts, gemini.ts, openai.ts
 ```
 
 ## Adding a new provider
 
 1. Add to `Provider` union in `lib/llm/types.ts`
 2. Add entry to `PROVIDERS` array in `lib/llm/providers.ts`
-3. Add `lib/llm/<provider>.ts` adapter (copy `ollama.ts` as template)
+3. Add `lib/llm/<provider>.ts` adapter
 4. Wire into `streamChatWithTools` / `completeText` in `lib/llm/index.ts`
 5. Add normalizer in `routes/providerModels/<name>.ts`
 6. Wire it in `routes/providerModels/index.ts`
@@ -105,6 +101,7 @@ When adding columns to `user_profiles` or `tabular_reviews`:
 1. Write migration in `backend/supabase/migrations/YYYYMMDDHHMMSS_<name>.sql`
 2. Update `backend/schema.sql` (for fresh installs)
 3. Apply to local DB (see Apply DB migrations above)
+
 ## Common gotchas
 
 - **Backend running old code**: process is `tsx watch src/index.ts` — kill + restart picks up changes immediately

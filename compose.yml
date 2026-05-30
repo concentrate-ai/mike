@@ -10,9 +10,6 @@ name: mike
 #   1. Copy .env.example to .env and fill in the required values
 #   2. docker compose up -d
 #
-# With Ollama (local LLM, requires NVIDIA GPU + nvidia-container-toolkit):
-#   docker compose --profile ollama up -d
-#
 # Supabase options:
 #   - Supabase Cloud: create a project at supabase.com, set SUPABASE_URL
 #     and keys in .env
@@ -36,11 +33,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    volumes:
-      - local-storage:/app/local-storage   # persists files when R2 is not configured
     environment:
       PORT: ${BACKEND_PORT:-3001}
-      LOCAL_STORAGE_DIR: /app/local-storage
       FRONTEND_URL: ${SITE_URL:?required}
       SUPABASE_URL: ${SUPABASE_URL:?required}
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:?required}
@@ -51,11 +45,6 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
-      VLLM_BASE_URL: ${VLLM_BASE_URL:-}
-      VLLM_API_KEY: ${VLLM_API_KEY:-}
-      GENERIC_BASE_URL: ${GENERIC_BASE_URL:-}
-      GENERIC_API_KEY: ${GENERIC_API_KEY:-}
       R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
@@ -86,48 +75,3 @@ services:
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:?required}
       BACKEND_INTERNAL_URL: http://backend:${BACKEND_PORT:-3001}
       SUPABASE_INTERNAL_URL: ${SUPABASE_URL:?required}
-
-  # ── Ollama (optional, GPU recommended) ────────────────────────────────────
-  # Enable with: docker compose --profile ollama up -d
-  # Requires nvidia-container-toolkit on the host.
-  #
-  # Set OLLAMA_BASE_URL=http://ollama:11434/v1/responses in .env when using
-  # this profile. On first start, run:
-  #   docker compose exec ollama ollama pull qwen3:30b-a3b
-  # or set OLLAMA_MODEL in .env and the ollama-init service will pull it.
-  ollama:
-    image: ollama/ollama:latest
-    profiles:
-      - ollama
-    restart: unless-stopped
-    volumes:
-      - ollama-data:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
-  ollama-init:
-    image: ollama/ollama:latest
-    profiles:
-      - ollama
-    depends_on:
-      - ollama
-    restart: on-failure
-    entrypoint: >
-      sh -c "
-        echo 'Waiting for Ollama to be ready...';
-        until ollama list > /dev/null 2>&1; do sleep 2; done;
-        echo 'Pulling ${OLLAMA_MODEL:-qwen3:30b-a3b}...';
-        ollama pull ${OLLAMA_MODEL:-qwen3:30b-a3b};
-        echo 'Done.';
-      "
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-
-volumes:
-  local-storage:   # document storage when R2 is not configured (see SETUP.md)
-  ollama-data:

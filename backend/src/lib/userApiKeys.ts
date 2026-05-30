@@ -17,14 +17,7 @@ type EncryptedKeyRow = {
     auth_tag: string;
 };
 
-// Only providers whose keys can be stored in the user_api_keys DB table.
-// "generic" uses env-only config (GENERIC_API_KEY / GENERIC_BASE_URL) and
-// has no DB row — keep it out of the saveable set.
-const DB_PROVIDERS: ApiKeyProvider[] = PROVIDER_REGISTRY
-    .filter((p) => p.id !== "generic")
-    .map((p) => p.id);
-
-// All providers (including generic) — used for env-key lookups only.
+const DB_PROVIDERS: ApiKeyProvider[] = PROVIDER_REGISTRY.map((p) => p.id);
 const PROVIDERS: ApiKeyProvider[] = PROVIDER_REGISTRY.map((p) => p.id);
 
 function envApiKey(provider: ApiKeyProvider): string | null {
@@ -138,7 +131,6 @@ export async function getUserApiKeys(
         gemini: envApiKey("gemini"),
         openai: envApiKey("openai"),
         concentrate: envApiKey("concentrate"),
-        generic: envApiKey("generic"),
     };
 
     const { data, error } = await db

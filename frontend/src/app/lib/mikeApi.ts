@@ -220,13 +220,6 @@ export async function fetchProviderModels(
     return res.models;
 }
 
-export async function fetchLocalProviders(): Promise<{ id: string; label: string }[]> {
-    const res = await apiRequest<{ providers: { id: string; label: string }[] }>(
-        "/providers/local-providers",
-    );
-    return res.providers;
-}
-
 export type CatalogModel = {
     provider: string;
     id: string;
@@ -979,35 +972,4 @@ export async function deleteWorkflowShare(
 }
 
 // ---------------------------------------------------------------------------
-// Host Files (server-side directory for RAG import)
 
-export interface HostFileEntry {
-    name: string;
-    path: string;
-    type: "file" | "directory";
-    size?: number;
-    ext?: string;
-}
-
-export interface HostFilesListing {
-    base_dir: string;
-    dir: string;
-    entries: HostFileEntry[];
-}
-
-export async function listHostFiles(
-    dir?: string,
-): Promise<HostFilesListing> {
-    const params = dir ? `?dir=${encodeURIComponent(dir)}` : "";
-    return apiRequest<HostFilesListing>(`/host-files${params}`);
-}
-
-export async function importHostFile(
-    filePath: string,
-): Promise<MikeDocument> {
-    return apiRequest<MikeDocument>("/host-files/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: filePath }),
-    });
-}

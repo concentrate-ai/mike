@@ -2,13 +2,10 @@ import { streamClaude, completeClaudeText } from "./claude";
 import { streamGemini, completeGeminiText } from "./gemini";
 import { streamOpenAI, completeOpenAIText } from "./openai";
 import { streamConcentrate, completeConcentrateText } from "./concentrate";
-import { streamOllama, completeOllamaText } from "./ollama";
-import { streamVllm, completeVllmText } from "./vllm";
-import { streamGeneric, completeGenericText } from "./generic";
 import { providerForModel } from "./models";
 import { hasAnyKey } from "./providers";
 import { parseQualifiedId } from "./routing";
-import type { Provider, StreamChatParams, StreamChatResult, UserApiKeys } from "./types";
+import type { StreamChatParams, StreamChatResult, UserApiKeys } from "./types";
 
 export * from "./types";
 export * from "./models";
@@ -25,20 +22,11 @@ export * from "./models";
  *      the named provider has a key, use it directly.
  *   3. Fall back to inferring provider from the bare slug.
  */
-// These providers are always local — Concentrate cannot route to them.
-const LOCAL_PROVIDERS = new Set<Provider>(["ollama", "vllm", "generic"]);
-
 function pick(
     model: string,
     apiKeys: UserApiKeys | undefined,
-): { provider: Provider; slug: string } {
+): { provider: "claude" | "gemini" | "openai" | "concentrate"; slug: string } {
     const { provider: explicit, slug } = parseQualifiedId(model);
-
-    // Local providers (Ollama, vLLM, Custom) always route direct — Concentrate
-    // cannot reach them since they're not in its model registry.
-    if (explicit && LOCAL_PROVIDERS.has(explicit)) {
-        return { provider: explicit, slug };
-    }
 
     // Concentrate is configured → always route through it.
     if (hasAnyKey("concentrate", apiKeys)) {
@@ -46,7 +34,6 @@ function pick(
     }
 
     // No Concentrate key — use whatever native key the user has.
-    // If the id was qualified, honour the explicit provider.
     if (explicit !== "concentrate" && hasAnyKey(explicit, apiKeys)) {
         return { provider: explicit, slug };
     }
@@ -64,9 +51,6 @@ export async function streamChatWithTools(
     if (provider === "concentrate") return streamConcentrate(p);
     if (provider === "claude")      return streamClaude(p);
     if (provider === "openai")      return streamOpenAI(p);
-    if (provider === "ollama")      return streamOllama(p);
-    if (provider === "vllm")        return streamVllm(p);
-    if (provider === "generic")     return streamGeneric(p);
     return streamGemini(p);
 }
 
@@ -82,8 +66,5 @@ export async function completeText(params: {
     if (provider === "concentrate") return completeConcentrateText(p);
     if (provider === "claude")      return completeClaudeText(p);
     if (provider === "openai")      return completeOpenAIText(p);
-    if (provider === "ollama")      return completeOllamaText(p);
-    if (provider === "vllm")        return completeVllmText(p);
-    if (provider === "generic")     return completeGenericText(p);
     return completeGeminiText(p);
 }
