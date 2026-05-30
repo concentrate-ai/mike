@@ -22,8 +22,9 @@ type ProviderConfig = {
     apiKeyField: string;  // key into profile.apiKeys
     description?: string;
     link?: string;
-    catalogProvider: string; // which backend provider id to fetch
-    zdrToggle?: boolean;     // show ZDR filter
+    catalogProvider: string;
+    zdrToggle?: boolean;
+    enterpriseNote?: string; // shown when ZDR is not available via standard key
 };
 
 const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
@@ -33,6 +34,7 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
         placeholder: "sk-ant-…",
         apiKeyField: "claude",
         catalogProvider: "anthropic",
+        enterpriseNote: "ZDR requires an Anthropic enterprise agreement. Standard API keys do not include ZDR.",
     },
     concentrate: {
         label: "Concentrate",
@@ -50,6 +52,7 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
         placeholder: "AIza…",
         apiKeyField: "gemini",
         catalogProvider: "gemini",
+        enterpriseNote: "ZDR requires a Google Cloud enterprise agreement. Standard API keys do not include ZDR.",
     },
     openai: {
         label: "OpenAI",
@@ -57,6 +60,7 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
         placeholder: "sk-…",
         apiKeyField: "openai",
         catalogProvider: "openai",
+        enterpriseNote: "ZDR requires an OpenAI enterprise agreement. Standard API keys do not include ZDR.",
     },
 };
 
@@ -83,18 +87,12 @@ export default function ProviderPage() {
     useEffect(() => {
         if (!config || !configured) { setModels([]); return; }
         setLoading(true);
-        // Fetch this provider's models directly, then overlay ZDR from Concentrate
-        const concentrateConfigured = !!profile?.apiKeys.concentrate?.configured;
-        Promise.all([
-            getProviderModels(config.catalogProvider),
-            concentrateConfigured ? getProviderModels("concentrate") : Promise.resolve([]),
-        ]).then(([providerModels, concentrateModels]) => {
-            const zdrSlugs = new Set(concentrateModels.filter((m) => m.zdr).map((m) => m.id));
-            setModels(providerModels.map((m) => ({
-                ...m,
-                zdr: zdrSlugs.has(m.id) || m.zdr,
-            })));
-        }).finally(() => setLoading(false));
+        // Frontier providers: fetch direct, no ZDR overlay — ZDR requires
+        // Concentrate routing or a separate enterprise agreement with the provider.
+        // Concentrate: its own endpoint already has accurate ZDR flags.
+        getProviderModels(config.catalogProvider)
+            .then(setModels)
+            .finally(() => setLoading(false));
     }, [configured, provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleToggleEnabled = useCallback(async (qid: string) => {
@@ -117,10 +115,10 @@ export default function ProviderPage() {
         : models;
 
     return (
-        <div className="space-y-8 max-w-2xl">
+        <div className="space-y-6 md:space-y-8 w-full max-w-2xl">
             {/* Header */}
             <div>
-                <h2 className="text-2xl font-medium font-serif">{config.label}</h2>
+                <h2 className="text-xl md:text-2xl font-medium font-serif">{config.label}</h2>
                 {config.description && (
                     <p className="text-sm text-gray-400 mt-1 leading-relaxed">
                         {config.description}
@@ -130,6 +128,14 @@ export default function ProviderPage() {
                                 {config.link.replace(/^https?:\/\//, "")}
                             </a></>
                         )}
+                    </p>
+                )}
+                {config.enterpriseNote && (
+                    <p className="text-xs text-gray-400 mt-1">
+                        <span className="font-medium text-gray-500">ZDR:</span> {config.enterpriseNote}{" "}
+                        <a href="/account/providers/concentrate" className="underline underline-offset-2 hover:text-gray-600 transition-colors">
+                            Use Concentrate for ZDR.
+                        </a>
                     </p>
                 )}
             </div>
@@ -300,11 +306,12 @@ function KeyRow({
 
     return (
         <div className="px-4 py-3">
-            <div className="grid items-center gap-x-4" style={{ gridTemplateColumns: "120px 1fr 96px 120px" }}>
-                <span className="text-sm font-medium text-gray-900 truncate">{label}</span>
-                <code className="text-[11px] text-gray-300 font-mono tracking-wide truncate">{envVar}</code>
-                <div className="flex justify-end">{statusNode}</div>
-                <div className="flex justify-end">
+            <div className="flex items-center gap-3 min-w-0">
+                <span className="text-sm font-medium text-gray-900 truncate shrink-0">{label}</span>
+                <code className="text-[11px] text-gray-300 font-mono tracking-wide truncate hidden sm:block min-w-0">{envVar}</code>
+                <div className="flex-1" />
+                <div className="shrink-0">{statusNode}</div>
+                <div className="shrink-0">
                     {serverConfigured ? (
                         <span title="Set via server environment" className="text-gray-300 cursor-default">
                             <Lock className="h-3.5 w-3.5" />
@@ -361,25 +368,26 @@ function CatalogTable({
 }) {
     return (
         <div className="rounded-xl border border-gray-100 overflow-hidden">
-            <table className="w-full text-sm table-fixed">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm">
                 <colgroup>
                     <col style={{ width: "32px" }} />
                     <col style={{ width: "28px" }} />
-                    <col className="w-auto" />
-                    <col style={{ width: "120px" }} />
-                    <col style={{ width: "58px" }} />
-                    <col style={{ width: "68px" }} />
-                    <col style={{ width: "76px" }} />
+                    <col style={{ minWidth: "120px" }} />
+                    <col style={{ width: "100px" }} />
+                    <col className="hidden sm:table-column" style={{ width: "54px" }} />
+                    <col className="hidden sm:table-column" style={{ width: "64px" }} />
+                    <col className="hidden sm:table-column" style={{ width: "72px" }} />
                 </colgroup>
                 <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
                         <th className="px-2 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide text-center" title="Enable">On</th>
                         <th className="px-2 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide text-center" title="Favorite">Fav</th>
                         <th className="text-left px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide">Model</th>
-                        <th className="px-2 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide text-center">Capabilities</th>
-                        <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide" title="Context window">CTX</th>
-                        <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide" title="Input price per million tokens">IN/M</th>
-                        <th className="text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide" title="Output price per million tokens">OUT/M</th>
+                        <th className="px-2 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide text-center">Cap.</th>
+                        <th className="hidden sm:table-cell text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide" title="Context window">CTX</th>
+                        <th className="hidden sm:table-cell text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide" title="Input price per million tokens">IN/M</th>
+                        <th className="hidden sm:table-cell text-right px-3 py-2 font-medium text-gray-400 text-xs uppercase tracking-wide" title="Output price per million tokens">OUT/M</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -402,7 +410,7 @@ function CatalogTable({
                                 <td className="px-3 py-2 overflow-hidden">
                                     <div className="flex items-baseline gap-2 min-w-0">
                                         <span className={`font-medium text-sm whitespace-nowrap ${enabled ? "text-gray-900" : "text-gray-400"}`}>{m.display_name}</span>
-                                        <span className="text-[11px] text-gray-300 font-mono truncate min-w-0" title={m.id}>{m.id}</span>
+                                        <span className="hidden sm:block text-[11px] text-gray-300 font-mono truncate min-w-0" title={m.id}>{m.id}</span>
                                     </div>
                                 </td>
                                 <td className="px-2 py-2">
@@ -414,15 +422,15 @@ function CatalogTable({
                                         <CapIcon type="zdr" active={!!m.zdr} />
                                     </div>
                                 </td>
-                                <td className="px-3 py-2 text-right text-gray-400 text-xs font-mono">
+                                <td className="hidden sm:table-cell px-3 py-2 text-right text-gray-400 text-xs font-mono">
                                     {m.context_window ? formatK(m.context_window) : "—"}
                                 </td>
-                                <td className="px-3 py-2 text-right text-xs font-mono">
+                                <td className="hidden sm:table-cell px-3 py-2 text-right text-xs font-mono">
                                     <span className={m.input_price_per_m != null ? "text-gray-500" : "text-gray-200"}>
                                         {m.input_price_per_m != null ? `$${m.input_price_per_m.toFixed(2)}` : "—"}
                                     </span>
                                 </td>
-                                <td className="px-3 py-2 text-right text-xs font-mono">
+                                <td className="hidden sm:table-cell px-3 py-2 text-right text-xs font-mono">
                                     <span className={m.output_price_per_m != null ? "text-gray-500" : "text-gray-200"}>
                                         {m.output_price_per_m != null ? `$${m.output_price_per_m.toFixed(2)}` : "—"}
                                     </span>
@@ -432,6 +440,7 @@ function CatalogTable({
                     })}
                 </tbody>
             </table>
+            </div>
         </div>
     );
 }

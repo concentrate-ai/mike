@@ -20,30 +20,13 @@ import { MODELS } from "@/app/lib/models";
 export { MODELS, type ModelOption } from "@/app/lib/models";
 export { DEFAULT_MODEL_ID, ALLOWED_MODEL_IDS } from "@/app/lib/models";
 
-// Maps routing provider → display author. Concentrate models are grouped by
-// their actual model author so the routing layer stays invisible in the UI.
-const PROVIDER_LABELS: Record<string, string> = {
+// Maps routing provider id → display label used as the picker group header.
+const ROUTING_PROVIDER_LABELS: Record<string, string> = {
     claude: "Anthropic",
     gemini: "Google",
     openai: "OpenAI",
+    concentrate: "Concentrate",
 };
-
-// Infer a human-readable author group from a model label or slug.
-// Used for Concentrate models that carry their own author from the API.
-function authorFromLabel(label: string): string {
-    const l = label.toLowerCase();
-    if (l.includes("claude")) return "Anthropic";
-    if (l.includes("gemini") || l.includes("gemma")) return "Google";
-    if (l.includes("gpt") || l.includes("o1") || l.includes("o3") || l.includes("o4")) return "OpenAI";
-    if (l.includes("deepseek")) return "DeepSeek";
-    if (l.includes("llama")) return "Meta";
-    if (l.includes("mistral") || l.includes("magistral")) return "Mistral";
-    if (l.includes("grok")) return "xAI";
-    if (l.includes("qwen") || l.includes("qwq")) return "Alibaba";
-    if (l.includes("kimi")) return "Moonshot";
-    if (l.includes("minimax")) return "MiniMax";
-    return "Other";
-}
 
 function qualifiedIdToOption(qid: string): ModelOption | null {
     const colon = qid.indexOf(":");
@@ -53,8 +36,8 @@ function qualifiedIdToOption(qid: string): ModelOption | null {
     const provider = qid.slice(0, colon);
     const slug = qid.slice(colon + 1);
     const known = MODELS.find((m) => m.id === slug);
-    // Group by model author, not routing provider
-    const group = known?.group ?? PROVIDER_LABELS[provider] ?? authorFromLabel(slug);
+    // Group by routing provider so picker sections map to how traffic is sent
+    const group = ROUTING_PROVIDER_LABELS[provider] ?? provider;
     return {
         id: qid,
         label: known?.label ?? slug,
@@ -115,11 +98,10 @@ export function useModels(
                 const slug = qid.includes(":") ? qid.split(":")[1] : qid;
                 const cat = catalogBySlug.get(qid) ?? catalogBySlug.get(slug ?? "");
                 if (cat) {
-                    const enrichedLabel = cat.display_name || opt.label;
                     return {
                         ...opt,
-                        label: enrichedLabel,
-                        group: opt.group === "Other" ? authorFromLabel(enrichedLabel) : opt.group,
+                        label: cat.display_name || opt.label,
+                        // Keep the routing provider group — don't overwrite with author
                         zdr: cat.zdr ?? opt.zdr,
                     };
                 }
@@ -161,17 +143,16 @@ export function ModelToggle({
     const favoritesSet = useMemo(() => new Set(favoriteModels), [favoriteModels]);
 
     const groups = useMemo(() => {
-        const seen: string[] = [];
         const hasFavorites = items.some((m) => favoritesSet.has(m.id));
-        if (hasFavorites) seen.push("Favorites");
-        for (const m of items) {
-            if (!seen.includes(m.group)) seen.push(m.group);
-        }
-        return seen;
+        const providerGroups = [...new Set(items.map((m) => m.group))].sort();
+        return hasFavorites ? ["Favorites", ...providerGroups] : providerGroups;
     }, [items, favoritesSet]);
 
     const itemsForGroup = (group: string) => {
-        if (group === "Favorites") return items.filter((m) => favoritesSet.has(m.id));
+        if (group === "Favorites") {
+            return [...items.filter((m) => favoritesSet.has(m.id))]
+                .sort((a, b) => a.label.localeCompare(b.label));
+        }
         return items.filter((m) => m.group === group);
     };
 
